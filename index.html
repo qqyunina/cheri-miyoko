@@ -476,14 +476,24 @@ function renderCheckout(){
 }
 
 let curOrder = null;
+const rnd2 = () => String(Math.floor(Math.random()*100)).padStart(2,'0');
 async function nextOrderNo(){
+  // 格式：市集代號 + 亂碼2 + 流水號2(每檔從01) + 亂碼2　例：CY370182
   try{
     if(sb){
-      const { data, error } = await sb.rpc('next_order_no');
-      if(!error && data!=null) return 'CM' + String(data).padStart(5,'0');
+      let code = 'CY';
+      try{
+        const s = await sb.from('app_settings').select('value').eq('key','current_event_code').maybeSingle();
+        if(s && s.data && s.data.value) code = String(s.data.value).trim().toUpperCase() || 'CY';
+      }catch(e){}
+      const { data:n, error } = await sb.rpc('next_order_seq', { p_code: code });
+      if(!error && n!=null){
+        const mid = n<=99 ? String(n).padStart(2,'0') : String(n); // 破99自動進位、仍可解讀
+        return code + rnd2() + mid + rnd2();
+      }
     }
   }catch(e){}
-  return 'CM' + Date.now().toString().slice(-8); // 雲端計數器未設定時的備援：仍給唯一編號
+  return 'CM' + Date.now().toString().slice(-8); // 雲端計數器未就緒時的備援：仍給唯一編號
 }
 async function submitOrder(){
   if(!requireLogin()){ pendingPage='checkout'; return; }
