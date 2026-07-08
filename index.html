@@ -347,7 +347,7 @@ header{position:relative;display:flex;align-items:center;justify-content:flex-en
 
 <script>
 const IMG = n => `images/${n}.jpg`;
-const PRODUCTS = [
+let PRODUCTS = [
   {id:1, name:'蕾絲天鵝愛心包', cat:'口金包', price:1280, emoji:'🦢', img:IMG('bag01'), desc:'蕾絲荷葉＋羊毛氈天鵝，珍珠鏈', tag:'招牌', tagt:'hot'},
   {id:2, name:'蓬蓬雲朵肩背包', cat:'背帶', price:780, emoji:'☁️', img:IMG('bag02'), desc:'軟綿雲朵造型，超好拍', tag:'人氣', tagt:'hot'},
   {id:3, name:'緞帶蝴蝶結髮帶', cat:'髮帶', price:280, emoji:'🎀', img:IMG('bag03'), desc:'可調鬆緊，日常百搭', tag:''},
@@ -361,7 +361,7 @@ const PRODUCTS = [
   {id:11, name:'緞帶珍珠戒指', cat:'戒指', price:260, emoji:'💍', img:IMG('bag11'), desc:'可調式，緞帶珍珠', tag:''},
   {id:12, name:'蕾絲口金零錢包', cat:'口金包', price:480, emoji:'🎁', img:IMG('bag12'), desc:'口金開口，附掛環', tag:'售完', tagt:'soldout', soldout:true},
 ];
-const CATS = ['全部','聯名限定','現貨專區','口金包','托特包','波奈特帽','髮帶','髮夾','項鍊','戒指','蓬蓬卡套','背帶'];
+let CATS = ['全部','聯名限定','現貨專區','口金包','托特包','波奈特帽','髮帶','髮夾','項鍊','戒指','蓬蓬卡套','背帶'];
 
 let cart = JSON.parse(localStorage.getItem('mkt_cart')||'{}');
 let orders = JSON.parse(localStorage.getItem('mkt_orders')||'[]');
@@ -644,7 +644,33 @@ function go(page){
   const s=document.querySelector('.page.active .scroll'); if(s) s.scrollTop=0;
 }
 
+// 從雲端讀取「上架中」的商品來取代預設清單（讀不到或還沒商品時，保留預設不弄壞頁面）
+async function loadCatalog(){
+  if(!sb) return;
+  try{
+    const { data, error } = await sb.from('active_products').select('*').order('id',{ascending:true});
+    if(error || !data || !data.length) return;
+    PRODUCTS = data.map(r=>({
+      id: r.id,
+      name: r.name || '',
+      cat: r.tab || '其他',
+      series: r.series || '',
+      price: r.price || 0,
+      emoji: r.emoji || '🎀',
+      img: r.image_url || '',
+      desc: r.descr || '',
+      tag: '', tagt: ''
+    }));
+    const tabs = [];
+    PRODUCTS.forEach(p=>{ if(p.cat && tabs.indexOf(p.cat)<0) tabs.push(p.cat); });
+    CATS = ['全部', ...tabs];
+    if(CATS.indexOf(curCat)<0) curCat='全部';
+    renderCats(); renderGrid();
+  }catch(e){ /* 保留預設清單 */ }
+}
+
 renderCats(); renderGrid(); renderCart(); updateBadge(); renderUserChips();
+loadCatalog();
 </script>
 </body>
 </html>
