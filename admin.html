@@ -236,6 +236,11 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
           <span id="news_status" class="evstat"></span>
         </div>
       </div>
+      <div class="newsedit">
+        <div class="nlbl">🎟 折扣碼管理</div>
+        <div id="disc_list"></div>
+        <button class="btn on" onclick="openDiscForm()" style="margin-top:4px">＋ 新增折扣碼</button>
+      </div>
       <div class="tools" style="margin-bottom:16px">
         <button class="btn on" onclick="openProductForm()">＋ 新增商品</button>
         <button class="btn" onclick="loadProducts()" title="重新整理">🔄 重新整理</button>
@@ -283,6 +288,34 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
         <div class="modal-act">
           <button class="btn" onclick="closeProductForm()">取消</button>
           <button class="btn on" onclick="saveProduct()">儲存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 折扣碼編輯彈窗 -->
+    <div id="discModal" class="modal" style="display:none">
+      <div class="modal-card">
+        <div class="modal-h"><b id="discModalTitle">新增折扣碼</b><button class="modal-x" onclick="closeDiscForm()">✕</button></div>
+        <div class="pform">
+          <label>折扣碼<input id="d_code" type="text" placeholder="例：CHERI100" autocapitalize="characters"/></label>
+          <div class="prow">
+            <label>折扣類型<select id="d_type" onchange="onDiscType()"><option value="fixed">折抵金額（$）</option><option value="percent">百分比折扣（%）</option></select></label>
+            <label><span id="d_amt_lbl">折抵金額（$）</span><input id="d_amount" type="number" inputmode="numeric" placeholder="100"/></label>
+          </div>
+          <label>最低消費門檻（$，未達不可用；0＝不限）<input id="d_min" type="number" inputmode="numeric" placeholder="0"/></label>
+          <div class="prow">
+            <label>開始時間<input id="d_start" type="datetime-local"/></label>
+            <label>結束時間<input id="d_end" type="datetime-local"/></label>
+          </div>
+          <div class="prow">
+            <label>每帳號可用次數（留空＝不限）<input id="d_peracct" type="number" inputmode="numeric" placeholder="不限"/></label>
+            <label>折扣碼總可用次數（留空＝不限）<input id="d_total" type="number" inputmode="numeric" placeholder="不限"/></label>
+          </div>
+          <label class="switchrow"><span>✅ 啟用此折扣碼</span><input id="d_active" type="checkbox" checked/></label>
+        </div>
+        <div class="modal-act">
+          <button class="btn" onclick="closeDiscForm()">取消</button>
+          <button class="btn on" onclick="saveDiscount()">儲存</button>
         </div>
       </div>
     </div>
@@ -538,11 +571,13 @@ function render(){
       </div>
       <div class="items">
         ${items.map((i,idx)=>`<div class="irow item"><span>${i.emoji||''} ${i.name} ×${i.qty}${done?'':`<input type="checkbox" class="itemchk" title="標記已做好" ${doneArr.includes(idx)?'checked':''} onchange="toggleItemDone('${o.id}',${idx})"/>`}</span><span>$${money(i.price*i.qty)}</span></div>`).join('')}
-        ${myship
-          ? `<div class="tot" style="border-top:1px dashed var(--bo);padding-top:10px;margin-top:6px"><span>總額</span><b>$${money(o.total+SHIP_FEE)}</b></div>`
-          : `<div class="irow" style="border-top:1px dashed var(--bo);padding-top:8px;margin-top:4px"><span>商品合計</span><span>$${money(o.total+SHIP_FEE)}</span></div>
-        <div class="irow"><span>賣貨便尾款</span><span>−$${money(SHIP_FEE)}</span></div>
-        <div class="tot"><span>總額</span><b>$${money(o.total)}</b></div>`}
+        ${(() => { const disc=o.discount_amount||0; const goods=o.total+SHIP_FEE+disc;
+          const discRow = disc>0 ? `<div class="irow"><span>🎟 折扣碼 ${o.discount_code||''}</span><span style="color:var(--pinkd)">−$${money(disc)}</span></div>` : '';
+          return myship
+          ? `${disc>0?`<div class="irow" style="border-top:1px dashed var(--bo);padding-top:8px;margin-top:4px"><span>商品合計</span><span>$${money(goods)}</span></div>${discRow}`:''}<div class="tot" ${disc>0?'':'style="border-top:1px dashed var(--bo);padding-top:10px;margin-top:6px"'}><span>總額</span><b>$${money(o.total+SHIP_FEE)}</b></div>`
+          : `<div class="irow" style="border-top:1px dashed var(--bo);padding-top:8px;margin-top:4px"><span>商品合計</span><span>$${money(goods)}</span></div>
+        ${discRow}<div class="irow"><span>賣貨便尾款</span><span>−$${money(SHIP_FEE)}</span></div>
+        <div class="tot"><span>總額</span><b>$${money(o.total)}</b></div>`; })()}
       </div>
       ${o.note?`<div class="note">📝 客人備註：${o.note}</div>`:''}
       <div class="adminnote">
@@ -577,7 +612,95 @@ function switchMode(m){
   $('orderView').style.display = m==='order'?'block':'none';
   $('productView').style.display = m==='product'?'block':'none';
   $('subtitle').textContent = m==='order'?'· 訂單管理後台':'· 商品管理後台';
-  if(m==='product'){ loadProducts(); loadEventCode(); buildNewsRows(); loadNews(); }
+  if(m==='product'){ loadProducts(); loadEventCode(); buildNewsRows(); loadNews(); loadDiscounts(); }
+}
+
+/* ========== 折扣碼管理 ========== */
+let discounts=[];
+function onDiscType(){ $('d_amt_lbl').textContent = $('d_type').value==='percent' ? '折扣百分比（%）' : '折抵金額（$）'; }
+async function loadDiscounts(){
+  const { data, error } = await sb.from('discount_codes').select('*').order('created_at',{ascending:false});
+  if(error){ $('disc_list').innerHTML = `<div class="pmeta" style="color:#c07">讀取折扣碼失敗：${error.message}（可能尚未建立資料表）</div>`; return; }
+  discounts = data||[];
+  renderDiscounts();
+}
+function discPeriodTxt(d){
+  const f = d.starts_at ? fmtShelf(d.starts_at) : '不限';
+  const t = d.ends_at ? fmtShelf(d.ends_at) : '不限';
+  return `${f} ~ ${t}`;
+}
+function renderDiscounts(){
+  const el=$('disc_list');
+  if(!discounts.length){ el.innerHTML = `<div class="pmeta" style="margin-bottom:10px">還沒有折扣碼，點下方新增～</div>`; return; }
+  el.innerHTML = discounts.map(d=>{
+    const val = d.is_percent ? `${d.amount}% off` : `折 $${d.amount}`;
+    const min = d.min_spend ? `　滿$${d.min_spend}` : '';
+    const per = (d.per_account_limit==null) ? '每人不限' : `每人${d.per_account_limit}次`;
+    const tot = (d.total_limit==null) ? '總數不限' : `總${d.total_limit}次`;
+    const on = d.active!==false;
+    return `<div class="pcard" style="padding:11px">
+      <div class="pinfo">
+        <div class="pname" style="font-family:monospace">${d.code} <span class="pstate ${on?'on':'off'}">${on?'啟用中':'已停用'}</span></div>
+        <div class="pmeta">${val}${min}　·　${per}／${tot}</div>
+        <div class="pmeta">🕒 ${discPeriodTxt(d)}</div>
+      </div>
+      <div class="pact">
+        <button class="btn sm ${on?'':'on'}" onclick="toggleDiscActive('${d.code.replace(/'/g,"\\'")}')">${on?'停用':'啟用'}</button>
+        <button class="btn sm" onclick="editDisc('${d.code.replace(/'/g,"\\'")}')">編輯</button>
+        <button class="cardel" onclick="delDiscount('${d.code.replace(/'/g,"\\'")}')" title="刪除">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+let editingDiscCode=null;
+function fillDiscForm(d){
+  $('d_code').value = d.code||'';
+  $('d_code').disabled = !!d.code;   // 編輯時不可改碼（是主鍵）
+  $('d_type').value = d.is_percent ? 'percent' : 'fixed'; onDiscType();
+  $('d_amount').value = d.amount!=null ? d.amount : '';
+  $('d_min').value = d.min_spend || '';
+  $('d_start').value = toLocalInput(d.starts_at);
+  $('d_end').value = toLocalInput(d.ends_at);
+  $('d_peracct').value = d.per_account_limit!=null ? d.per_account_limit : '';
+  $('d_total').value = d.total_limit!=null ? d.total_limit : '';
+  $('d_active').checked = d.active!==false;
+}
+function openDiscForm(){ editingDiscCode=null; $('discModalTitle').textContent='新增折扣碼'; fillDiscForm({active:true}); $('discModal').style.display='flex'; }
+function editDisc(code){ const d=discounts.find(x=>x.code===code); if(!d) return; editingDiscCode=code; $('discModalTitle').textContent='編輯折扣碼'; fillDiscForm(d); $('discModal').style.display='flex'; }
+function closeDiscForm(){ $('discModal').style.display='none'; }
+async function saveDiscount(){
+  const code = ($('d_code').value||'').trim().toUpperCase();
+  if(!code){ showToast('請填折扣碼'); return; }
+  const amount = parseInt($('d_amount').value,10)||0;
+  if(amount<=0){ showToast('請填折扣金額 / 百分比'); return; }
+  const numOrNull = v => { const s=(v||'').trim(); if(s==='') return null; const n=parseInt(s,10); return isNaN(n)?null:n; };
+  const row = {
+    code,
+    amount,
+    is_percent: $('d_type').value==='percent',
+    min_spend: parseInt($('d_min').value,10)||0,
+    starts_at: fromLocalInput($('d_start').value),
+    ends_at: fromLocalInput($('d_end').value),
+    per_account_limit: numOrNull($('d_peracct').value),
+    total_limit: numOrNull($('d_total').value),
+    active: $('d_active').checked
+  };
+  const { error } = await sb.from('discount_codes').upsert(row, { onConflict:'code' });
+  if(error){ showToast('儲存失敗：'+error.message); return; }
+  closeDiscForm(); showToast(editingDiscCode?'已更新折扣碼 🎀':'已新增折扣碼 🎀'); loadDiscounts();
+}
+async function toggleDiscActive(code){
+  const d=discounts.find(x=>x.code===code); if(!d) return;
+  const next = d.active===false ? true : false;
+  const { error } = await sb.from('discount_codes').update({active:next}).eq('code',code);
+  if(error){ showToast('切換失敗：'+error.message); return; }
+  d.active=next; renderDiscounts();
+}
+async function delDiscount(code){
+  if(!confirm(`確定刪除折扣碼「${code}」？`)) return;
+  const { error } = await sb.from('discount_codes').delete().eq('code',code);
+  if(error){ showToast('刪除失敗：'+error.message); return; }
+  showToast('已刪除折扣碼'); loadDiscounts();
 }
 const NEWS_TITLES = ['最新市集資訊','訂購須知','最新消息'];
 const NEWS_EMOJI = ['📢','📝','✨'];
@@ -916,10 +1039,10 @@ async function del(id){
 
 function exportCsv(){
   if(orders.length===0){ alert('沒有訂單可匯出'); return; }
-  const rows = [['訂單編號','狀態','賣貨便','取貨人','IG','Email','匯款後5碼','品項','金額','客人備註','攤主備註','下單時間']];
+  const rows = [['訂單編號','狀態','賣貨便','取貨人','IG','Email','匯款後5碼','品項','折扣碼','折抵金額','金額','客人備註','攤主備註','下單時間']];
   orders.forEach(o=>{
     const items = (Array.isArray(o.items)?o.items:[]).map(i=>`${i.name}x${i.qty}`).join(' / ');
-    rows.push([o.no,o.status,o.myship_done?'已下單':'未下單',o.name,'@'+o.ig,o.email||'',o.last5||'',items,o.total,o.note||'',o.admin_note||'',fmtTime(o.created_at)]);
+    rows.push([o.no,o.status,o.myship_done?'已下單':'未下單',o.name,'@'+o.ig,o.email||'',o.last5||'',items,o.discount_code||'',o.discount_amount||0,o.total,o.note||'',o.admin_note||'',fmtTime(o.created_at)]);
   });
   const csv = '\ufeff'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
