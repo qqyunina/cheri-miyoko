@@ -361,7 +361,7 @@ let PRODUCTS = [
   {id:11, name:'緞帶珍珠戒指', cat:'戒指', price:260, emoji:'💍', img:IMG('bag11'), desc:'可調式，緞帶珍珠', tag:''},
   {id:12, name:'蕾絲口金零錢包', cat:'口金包', price:480, emoji:'🎁', img:IMG('bag12'), desc:'口金開口，附掛環', tag:'售完', tagt:'soldout', soldout:true},
 ];
-let CATS = ['全部','聯名限定','現貨專區','口金包','托特包','波奈特帽','髮帶','髮夾','項鍊','戒指','蓬蓬卡套','背帶'];
+let CATS = ['全部','聯名商品','現貨商品','口金包','托特包','波奈特帽','髮帶','髮夾','項鍊','戒指','蓬蓬卡套','背帶'];
 
 let cart = JSON.parse(localStorage.getItem('mkt_cart')||'{}');
 let orders = JSON.parse(localStorage.getItem('mkt_orders')||'[]');
@@ -661,10 +661,6 @@ async function loadCatalog(){
       desc: r.descr || '',
       tag: '', tagt: ''
     }));
-    const tabs = [];
-    PRODUCTS.forEach(p=>{ if(p.cat && tabs.indexOf(p.cat)<0) tabs.push(p.cat); });
-    CATS = ['全部', ...tabs];
-    if(CATS.indexOf(curCat)<0) curCat='全部';
     renderCats(); renderGrid();
   }catch(e){ /* 保留預設清單 */ }
 }
