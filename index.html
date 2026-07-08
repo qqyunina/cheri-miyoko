@@ -277,7 +277,7 @@ a.newscard:active{transform:scale(.98)}
   <div class="logo" onclick="go('shop')" title="回商品頁"><img src="logo.png" alt="Cheri Miyoko" onerror="this.parentNode.innerHTML='<b>少女午茶派對</b>'"/></div>
   <div class="hbtns">
     <button class="hbtn" onclick="go('cart')" title="購物車">🛒<span class="badge hide" id="badge">0</span></button>
-    <button class="hbtn" onclick="go('orders')" title="我的訂單">📜</button>
+    <button class="hbtn" onclick="go('orders')" title="我的訂單">💌</button>
   </div>
 </header>
 
@@ -754,7 +754,7 @@ function renderOrders(){
   const list = myOrders();
   const foot = $('ordFoot');
   if(list.length===0){
-    $('ordersList').innerHTML = `<div class="empty"><div class="e">📜</div>尚無魔法訂單</div>`;
+    $('ordersList').innerHTML = `<div class="empty"><div class="e">💌</div>尚無魔法訂單</div>`;
     if(foot) foot.style.display='none';
     return;
   }
