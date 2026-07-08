@@ -135,6 +135,10 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .evbar input{width:110px;padding:8px 12px;border:1.5px solid var(--bo);border-radius:10px;font-size:16px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--txd);background:#fff}
 .evstat{font-size:13px;color:var(--pinkd);font-weight:700}
 .evhint{font-size:12.5px;color:var(--mu);margin:0 2px 16px;line-height:1.6}
+.periodbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--pinkd);font-weight:700;margin:10px 0 4px}
+.periodbar input[type=date]{padding:6px 10px;border:1.5px solid var(--bo);border-radius:10px;font-size:13px;color:var(--txd);background:#fff}
+.periodbar .pclr{padding:5px 12px;border:1.5px solid var(--bo);border-radius:10px;background:#fff;color:var(--mu);font-weight:700;font-size:12.5px;cursor:pointer}
+.periodbar .pclr.on{background:var(--pink);color:#fff;border-color:var(--pink)}
 .pact{display:flex;flex-direction:column;gap:8px;align-items:center;flex-shrink:0}
 .btn.sm{padding:6px 14px;font-size:12.5px;border-radius:10px}
 /* 彈窗表單 */
@@ -194,6 +198,7 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
         <button class="btn" onclick="load()" title="重新整理">🔄 重新整理</button>
       </div>
       <div class="stats" id="stats"></div>
+      <div class="periodbar" id="periodbar"></div>
       <input class="searchbox" id="search" type="search" placeholder="🔍 搜尋訂單編號 / 姓名 / IG" oninput="onSearch()"/>
       <div class="filters" id="filters"></div>
       <div id="list"></div>
@@ -261,23 +266,12 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let orders = [];
 let filter = '製作中';
 let search = '';
+let periodFrom = '';   // 本期營收/強強榜 的日期區間（空＝全部）
+let periodTo = '';
 const metaOpen = new Set();
 const SHIP_FEE = 100;
-/* 上架商品清單（需與 index.html 的 PRODUCTS 同步；用來顯示未售出品項） */
-const CATALOG = [
-  {name:'蕾絲天鵝愛心包', emoji:'🦢', price:1280},
-  {name:'蓬蓬雲朵肩背包', emoji:'☁️', price:780},
-  {name:'緞帶蝴蝶結髮帶', emoji:'🎀', price:280},
-  {name:'蕾絲珍珠蓬蓬卡套', emoji:'👛', price:320},
-  {name:'愛心亮片蓬蓬卡套', emoji:'💗', price:300},
-  {name:'草莓托特包', emoji:'🍓', price:720},
-  {name:'格紋午茶托特包', emoji:'🧺', price:850},
-  {name:'蕾絲波奈特帽', emoji:'🌸', price:680},
-  {name:'毛絨兔兔髮夾', emoji:'🐰', price:180},
-  {name:'珍珠愛心項鍊', emoji:'📿', price:420},
-  {name:'緞帶珍珠戒指', emoji:'💍', price:260},
-  {name:'蕾絲口金零錢包', emoji:'🎁', price:480},
-];
+/* 現有商品清單（從後台 products 表載入；刪除的商品自動不在內＝不計算，下架的仍在＝計算） */
+let catalogProducts = [];
 const $ = id => document.getElementById(id);
 const money = n => (n||0).toLocaleString();
 const fmtTime = t => t ? new Date(t).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
@@ -307,12 +301,38 @@ async function load(){
     alert('讀取訂單失敗：'+error.message); return;
   }
   orders = data || [];
+  // 載入現有商品清單（強強榜用；刪除的不會在這份名單裡＝不計算）
+  try{
+    const pr = await sb.from('products').select('name,emoji');
+    if(!pr.error && pr.data) catalogProducts = pr.data;
+  }catch(e){}
   render();
 }
 
+// 判斷訂單是否落在選定的日期區間內（空＝不限）
+function inPeriod(o){
+  const t = o.created_at ? new Date(o.created_at).getTime() : 0;
+  if(periodFrom && t < new Date(periodFrom+'T00:00:00').getTime()) return false;
+  if(periodTo   && t > new Date(periodTo  +'T23:59:59').getTime()) return false;
+  return true;
+}
+function setPeriodFrom(v){ periodFrom=v; render(); }
+function setPeriodTo(v){ periodTo=v; render(); }
+function clearPeriod(){ periodFrom=''; periodTo=''; render(); }
+function renderPeriodBar(){
+  const all = !periodFrom && !periodTo;
+  $('periodbar').innerHTML =
+    `📅 本期區間：`
+    + `<input type="date" id="pfrom" value="${periodFrom}" onchange="setPeriodFrom(this.value)">`
+    + ` ～ `
+    + `<input type="date" id="pto" value="${periodTo}" onchange="setPeriodTo(this.value)">`
+    + `<span class="pclr ${all?'on':''}" onclick="clearPeriod()">全部</span>`;
+}
 function render(){
-  const onsiteRev = orders.reduce((s,o)=>s+(o.total||0),0);
-  const totalRev = orders.reduce((s,o)=>s+(o.total||0)+SHIP_FEE,0);
+  const periodOrders = orders.filter(inPeriod);
+  const periodRev = periodOrders.reduce((s,o)=>s+(o.total||0)+SHIP_FEE,0); // 本期營收（每筆＋100）
+  const totalRev  = orders.reduce((s,o)=>s+(o.total||0)+SHIP_FEE,0);        // 總營收（每筆＋100）
+  renderPeriodBar();
   const notOrdered = orders.filter(o=>stage(o)==='未下單').length;
   const making = orders.filter(o=>stage(o)==='製作中').length;
   const done = orders.filter(o=>stage(o)==='已出貨').length;
@@ -327,7 +347,7 @@ function render(){
   $('stats').innerHTML = `
     <div class="stat"><div class="n">${orders.length}</div><div class="l">總訂單</div></div>
     <div class="stat"><div class="n">${todayCnt}</div><div class="l">今日訂單</div></div>
-    <div class="stat"><div class="n">$${money(onsiteRev)}</div><div class="l">現場營收</div></div>
+    <div class="stat"><div class="n">$${money(periodRev)}</div><div class="l">本期營收</div></div>
     <div class="stat"><div class="n">$${money(totalRev)}</div><div class="l">總營收</div></div>`;
 
   const cnt = { '製作中':making, '已出貨':done, '未下單':notOrdered };
@@ -350,9 +370,12 @@ function render(){
     const el0 = $('list');
     const segsOf = (rows,tot)=>{ let a=0; return rows.map((r,i)=>{ const f=tot?a/tot*100:0; a+=r.rev; const t=tot?a/tot*100:0; return `${palette[i%palette.length]} ${f.toFixed(2)}% ${t.toFixed(2)}%`; }).join(','); };
 
+    // 強強榜只統計「本期區間」內的訂單
+    const rankOrders = orders.filter(inPeriod);
+
     // ---- 顧客營收占比 ----
     const byIg = {};
-    orders.forEach(o=>{
+    rankOrders.forEach(o=>{
       const ig = (o.ig||'').trim();
       const key = ig || ('__noig__'+(o.name||'').trim());
       if(!byIg[key]) byIg[key] = { ig, names:[], rev:0, cnt:0 };
@@ -364,21 +387,22 @@ function render(){
     const custRows = Object.keys(byIg).map(k=>({ key:k, ...byIg[k] })).sort((a,b)=>b.rev-a.rev);
     const custTotal = custRows.reduce((s,r)=>s+r.rev,0);
 
-    // ---- 商品營收占比（含未售出品項）----
+    // ---- 商品營收占比（只算「後台現有商品」；刪除的自動排除，下架的仍計算）----
     const byName = {};
-    CATALOG.forEach(p=>{ byName[p.name] = { label:(p.emoji||'')+' '+p.name, units:0, rev:0 }; });
-    orders.forEach(o=>{
+    catalogProducts.forEach(p=>{ byName[p.name] = { label:(p.emoji||'')+' '+p.name, units:0, rev:0 }; });
+    rankOrders.forEach(o=>{
       (Array.isArray(o.items)?o.items:[]).forEach(it=>{
         const nm = it.name||'';
-        if(!byName[nm]) byName[nm] = { label:(it.emoji||'')+' '+nm, units:0, rev:0 };
-        byName[nm].units += (it.qty||1);
-        byName[nm].rev += (it.price||0)*(it.qty||1);
+        if(byName[nm]){ // 只計算目前仍存在的商品；已刪除商品(不在名單)直接略過
+          byName[nm].units += (it.qty||1);
+          byName[nm].rev += (it.price||0)*(it.qty||1);
+        }
       });
     });
     const prodRows = Object.keys(byName).map(k=>byName[k]).sort((a,b)=> b.rev-a.rev || b.units-a.units);
     const soldProds = prodRows.filter(r=>r.units>0);
     const prodTotal = prodRows.reduce((s,r)=>s+r.rev,0);
-    const listedKinds = CATALOG.length;
+    const listedKinds = catalogProducts.length;
     const soldKinds = soldProds.length;
     const soldUnits = prodRows.reduce((s,r)=>s+r.units,0);
 
@@ -408,9 +432,10 @@ function render(){
 
     const soldRate = listedKinds>0 ? `　售出率 ${(soldKinds/listedKinds*100).toFixed(0)}%` : '';
     const listedInfo = `上架 ${listedKinds} 種／`;
+    const periodLabel = (periodFrom||periodTo) ? `　🗓 ${periodFrom||'開始'} ~ ${periodTo||'現在'}` : '　🗓 全部期間';
 
     el0.innerHTML = `<div class="card">
-      <div class="todo-h">👑 顧客營收占比　<span>共 ${custRows.length} 位・$${money(custTotal)}</span></div>
+      <div class="todo-h">👑 顧客營收占比　<span>共 ${custRows.length} 位・$${money(custTotal)}${periodLabel}</span></div>
       <div class="vip-wrap">
         <div class="vip-pie" style="background:conic-gradient(${segsOf(custRows,custTotal)})"></div>
         <div class="vip-legend">${custLegend}</div>
