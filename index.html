@@ -366,7 +366,7 @@ a.newscard:active{transform:scale(.98)}
       </div>
       <label class="onsite">
         <input type="checkbox" id="payOnSite" onchange="toggleOnSite()"/>
-        <span>我要<b>現場付款</b>（免填匯款後 5 碼）</span>
+        <span>我要<b>現場付款</b>（僅供市集現場客人使用）</span>
       </label>
       <div class="field" id="last5Field">
         <label>匯款帳號後 5 碼 <span class="req">*</span></label>
@@ -376,7 +376,7 @@ a.newscard:active{transform:scale(.98)}
     </div>
     <div class="bar">
       <div class="tot"><small>總額</small><b>$<span id="payBarTotal">0</span></b></div>
-      <button class="pbtn" onclick="confirmPay()">完成訂購 🎀</button>
+      <button class="pbtn" onclick="confirmPay()">完成訂購 🎁</button>
     </div>
   </div>
 
@@ -384,7 +384,7 @@ a.newscard:active{transform:scale(.98)}
   <div class="page" id="p-success">
     <div class="scroll">
       <div class="success">
-        <div class="ok">🎀</div>
+        <div class="ok">🎁</div>
         <h2>完成訂購！</h2>
         <div class="ono">訂單編號 <b id="okNo"></b></div>
         <div class="shipnote">
@@ -441,7 +441,7 @@ a.newscard:active{transform:scale(.98)}
     <div class="dlg-foot">
       <div class="step"><button onclick="dlgQty(-1)">−</button><span id="dlgQ">1</span><button onclick="dlgQty(1)">＋</button></div>
       <button class="pbtn ghost" onclick="dlgAdd()">加入購物車</button>
-      <button class="pbtn" onclick="dlgBuyNow()">立即購買 🎀</button>
+      <button class="pbtn" onclick="dlgBuyNow()">立即購買</button>
     </div>
   </div>
 </div>
@@ -819,12 +819,11 @@ let dlgId=null, dlgN=1;
 function dlgImg(u){ return `<img class="dimg" src="${u}" draggable="false" oncontextmenu="return false" onerror="this.remove()"/>`; }
 // 版面順序：標題（名稱）→ 敘述 → 圖片
 function dlgRender(p, txt, imgs){
-  const head = `<div class="dname">${esc(p.name)}</div><div class="dprice">$${p.price}</div>`
-    + `<div class="ddesc">${txt}</div>`;
+  const head = `<div class="dname">${esc(p.name)}</div><div class="ddesc">${txt}</div>`;
   const gallery = imgs && imgs.length
     ? imgs.map(dlgImg).join('')
     : (p.img ? dlgImg(p.img) : `<div class="demoji">${p.emoji}</div>`);
-  return head + gallery;
+  return head + gallery + `<div class="dprice">$${p.price}</div>`;
 }
 async function openDetail(id){
   const p = PRODUCTS.find(x=>x.id===id); if(!p) return;
