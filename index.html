@@ -27,11 +27,10 @@ body{
   display:flex;flex-direction:column;height:100dvh;
   background-color:#fce9f0;
   background-image:
-    radial-gradient(circle at 50% 50%, rgba(201,122,152,.18) 0 2px, transparent 2.8px),
-    radial-gradient(circle at 50% 50%, rgba(217,180,131,.13) 0 1.5px, transparent 2.2px),
+    url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22120%22%20height=%22120%22%20viewBox=%220%200%20120%20120%22%3E%3Cg%20transform=%22translate(30%2032)%22%3E%3Ccircle%20r=%226%22%20fill=%22%23e8a6bd%22/%3E%3Ccircle%20r=%222.6%22%20fill=%22%23d47f9c%22/%3E%3Cellipse%20cx=%22-10%22%20cy=%228%22%20rx=%223.4%22%20ry=%221.7%22%20fill=%22%23c3d3a6%22%20transform=%22rotate(35%20-10%208)%22/%3E%3Cellipse%20cx=%229%22%20cy=%229%22%20rx=%223%22%20ry=%221.5%22%20fill=%22%23c3d3a6%22%20transform=%22rotate(-30%209%209)%22/%3E%3C/g%3E%3Cg%20transform=%22translate(92%2084)%22%3E%3Ccircle%20r=%225%22%20fill=%22%23edb6c8%22/%3E%3Ccircle%20r=%222.2%22%20fill=%22%23d47f9c%22/%3E%3Cellipse%20cx=%228%22%20cy=%226%22%20rx=%223%22%20ry=%221.5%22%20fill=%22%23c3d3a6%22%20transform=%22rotate(-25%208%206)%22/%3E%3C/g%3E%3Ccircle%20cx=%2278%22%20cy=%2222%22%20r=%221.7%22%20fill=%22%23e3b0c2%22/%3E%3Ccircle%20cx=%2218%22%20cy=%2292%22%20r=%221.7%22%20fill=%22%23e3b0c2%22/%3E%3Ccircle%20cx=%2258%22%20cy=%2260%22%20r=%221.4%22%20fill=%22%23e8c6a0%22/%3E%3Ccircle%20cx=%22105%22%20cy=%2240%22%20r=%221.3%22%20fill=%22%23e3b0c2%22/%3E%3C/svg%3E"),
     linear-gradient(180deg,#fdecf2 0%, #f8dae6 50%, #fce6db 100%);
-  background-size:48px 48px, 48px 48px, 100% 100%;
-  background-position:0 0, 24px 24px, 0 0;
+  background-size:120px 120px, 100% 100%;
+  background-repeat:repeat, no-repeat;
   background-attachment:fixed;position:relative;
 }
 /* 柔和蕾絲內框 */
@@ -84,7 +83,14 @@ header{position:relative;display:flex;align-items:center;justify-content:flex-en
 .newscard .nh{font-family:var(--serif);font-weight:900;color:var(--pinkd);font-size:14.5px;letter-spacing:1px;margin-bottom:7px;padding-bottom:7px;border-bottom:1px dashed var(--bo)}
 .newscard .nb{font-size:12.5px;color:var(--txd);line-height:1.75;word-break:break-word}
 .newscard .nb b{color:var(--pinkd)}
-@media(max-width:640px){ .news{grid-template-columns:1fr;gap:10px} }
+a.newscard{text-decoration:none;display:block}
+a.newscard:active{transform:scale(.98)}
+@media(max-width:640px){
+  .news{grid-template-columns:repeat(3,1fr);gap:7px}
+  .newscard{padding:10px 9px;border-radius:14px}
+  .newscard .nh{font-size:11.5px;letter-spacing:0;margin-bottom:5px;padding-bottom:5px}
+  .newscard .nb{font-size:10.5px;line-height:1.6}
+}
 
 /* Categories */
 .cats{display:flex;gap:9px;overflow-x:auto;padding:2px 2px 14px;-webkit-overflow-scrolling:touch;width:100%;max-width:1160px;margin:0 auto}
@@ -101,7 +107,7 @@ header{position:relative;display:flex;align-items:center;justify-content:flex-en
 .prod:hover{transform:translateY(-5px);box-shadow:0 16px 32px rgba(200,140,165,.28)}
 .prod:active{transform:translateY(-1px) scale(.99)}
 .prod .img{position:relative;aspect-ratio:1;font-size:60px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,#fff,var(--pinkl));overflow:hidden}
-.prod .img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .35s ease}
+.prod .img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .35s ease;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 .prod:hover .img img{transform:scale(1.06)}
 .prod .body{padding:11px 13px 14px;display:flex;flex-direction:column;flex:1}
 .prod .name{font-size:14.5px;font-weight:700;color:var(--txd);margin-bottom:4px}
@@ -243,8 +249,7 @@ header{position:relative;display:flex;align-items:center;justify-content:flex-en
     <div class="scroll">
       <div class="hero">
         <div class="script">Cheri Miyoko</div>
-        <h1>少女午茶派對</h1>
-        <div class="tagline">市集專屬下單頁</div>
+        <h1>櫻桃波波島の魔法店</h1>
         <div class="rule"></div>
       </div>
       <div class="news" id="news"></div>
@@ -439,12 +444,12 @@ function renderGrid(){
         : `<button class="addbtn" onclick="chg(${p.id},1)">＋</button>`);
     return `<div class="prod">
       ${p.tag?`<span class="tag ${p.tagt||''}">${p.tag}</span>`:''}
-      <div class="img"><img src="${p.img}" alt="${p.name}" loading="lazy" onerror="this.remove()"/><span>${p.emoji}</span></div>
+      <div class="img"><img src="${p.img}" alt="${p.name}" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.remove()"/><span>${p.emoji}</span></div>
       <div class="body">
         <div class="name">${p.name}</div>
         <div class="desc">${p.desc}</div>
         <div class="row">
-          <div class="price">$${p.price}<small>/份</small></div>
+          <div class="price">$${p.price}</div>
           ${ctrl}
         </div>
       </div>
@@ -667,6 +672,7 @@ function go(page){
   if((page==='checkout'||page==='orders') && !user){ pendingPage=page; requireLogin(); if(page==='orders') return; }
   if(page==='checkout' && cartCount()===0){ toast('購物車是空的'); page='shop'; }
   PAGES.forEach(p=>$('p-'+p).classList.toggle('active', p===page));
+  if(page==='shop') renderGrid();
   if(page==='cart') renderCart();
   if(page==='checkout'){ renderUserChips(); renderCheckout(); }
   if(page==='orders'){ renderUserChips(); renderOrders(); syncOrdersFromCloud(); }
@@ -696,18 +702,23 @@ async function loadCatalog(){
 
 // ---- 首頁 News 三槽（後台可編輯，存在 app_settings.news）----
 const NEWS_DEFAULT = [
-  {title:'最新市集資訊', body:'少女午茶派對 7/17–7/19\n📍 中山捷運站 6 號出口\n台北市南京西路 64 巷 9 弄 17 號'},
-  {title:'訂購須知', body:'手作商品，下單後請匯款並完成賣貨便寄送\n製作約需 14–30 天 🎀'},
-  {title:'最新消息', body:'新品陸續上架中 ♡\n追蹤 IG @cheri_miyoko_ 看第一手'}
+  {emoji:'📢', title:'最新市集資訊', body:'少女午茶派對 7/17–7/19\n📍 中山捷運站 6 號出口\n台北市南京西路 64 巷 9 弄 17 號', url:''},
+  {emoji:'📝', title:'訂購須知', body:'手作商品，下單後請匯款並完成賣貨便寄送\n製作約需 14–30 天 🎀', url:''},
+  {emoji:'✨', title:'最新消息', body:'新品陸續上架中 ♡\n追蹤 IG @cheri_miyoko_ 看第一手', url:''}
 ];
 let newsData = NEWS_DEFAULT;
 const esc = s => (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 function renderNews(){
   const el = $('news'); if(!el) return;
   const icons = ['📢','📝','✨'];
-  el.innerHTML = newsData.map((n,i)=>
-    `<div class="newscard"><div class="nh">${icons[i]||'🎀'} ${esc(n.title)}</div><div class="nb">${esc(n.body).replace(/\n/g,'<br>')}</div></div>`
-  ).join('');
+  el.innerHTML = newsData.map((n,i)=>{
+    const emoji = (n.emoji||icons[i]||'🎀');
+    const inner = `<div class="nh">${esc(emoji)} ${esc(n.title)}</div><div class="nb">${esc(n.body).replace(/\n/g,'<br>')}</div>`;
+    const link = (n.url||'').trim();
+    return link
+      ? `<a class="newscard" href="${esc(link)}" target="_blank" rel="noopener">${inner}</a>`
+      : `<div class="newscard">${inner}</div>`;
+  }).join('');
 }
 async function loadNews(){
   if(sb){

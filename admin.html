@@ -143,6 +143,9 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .newsedit .nlbl{font-weight:800;color:var(--pinkd);font-size:14px;margin-bottom:10px}
 .nrow{margin-bottom:12px}
 .nrow input{width:100%;padding:8px 12px;border:1.5px solid var(--bo);border-radius:10px;font-size:14px;font-weight:700;color:var(--txd);margin-bottom:6px;box-sizing:border-box}
+.nrowtop{display:flex;gap:6px}
+.nrowtop .nemoji{width:52px;flex:0 0 52px;text-align:center;font-size:18px;padding:8px 4px}
+.nrowtop input:last-child{flex:1}
 .nrow textarea{width:100%;padding:8px 12px;border:1.5px solid var(--bo);border-radius:10px;font-size:13.5px;color:var(--txd);line-height:1.6;min-height:64px;resize:vertical;box-sizing:border-box;font-family:inherit}
 .pact{display:flex;flex-direction:column;gap:8px;align-items:center;flex-shrink:0}
 .btn.sm{padding:6px 14px;font-size:12.5px;border-radius:10px}
@@ -561,12 +564,17 @@ function switchMode(m){
   if(m==='product'){ loadProducts(); loadEventCode(); buildNewsRows(); loadNews(); }
 }
 const NEWS_TITLES = ['最新市集資訊','訂購須知','最新消息'];
+const NEWS_EMOJI = ['📢','📝','✨'];
 function buildNewsRows(){
   if($('news_rows').dataset.built) return;
   $('news_rows').innerHTML = NEWS_TITLES.map((t,i)=>
     `<div class="nrow">
-       <input id="news_t${i}" placeholder="標題" value="${t}"/>
+       <div class="nrowtop">
+         <input id="news_e${i}" class="nemoji" placeholder="😀" value="${NEWS_EMOJI[i]}"/>
+         <input id="news_t${i}" placeholder="標題" value="${t}"/>
+       </div>
        <textarea id="news_b${i}" placeholder="內文（可換行）"></textarea>
+       <input id="news_u${i}" placeholder="超連結網址（可留空，填了整張卡片可點）"/>
      </div>`).join('');
   $('news_rows').dataset.built='1';
 }
@@ -575,12 +583,22 @@ async function loadNews(){
     const { data } = await sb.from('app_settings').select('value').eq('key','news').maybeSingle();
     if(data && data.value){
       const arr = JSON.parse(data.value);
-      if(Array.isArray(arr)) arr.forEach((n,i)=>{ if($('news_t'+i)) $('news_t'+i).value=n.title||''; if($('news_b'+i)) $('news_b'+i).value=n.body||''; });
+      if(Array.isArray(arr)) arr.forEach((n,i)=>{
+        if($('news_e'+i)) $('news_e'+i).value=n.emoji||NEWS_EMOJI[i];
+        if($('news_t'+i)) $('news_t'+i).value=n.title||'';
+        if($('news_b'+i)) $('news_b'+i).value=n.body||'';
+        if($('news_u'+i)) $('news_u'+i).value=n.url||'';
+      });
     }
   }catch(e){}
 }
 async function saveNews(){
-  const arr = [0,1,2].map(i=>({ title:($('news_t'+i).value||'').trim(), body:($('news_b'+i).value||'').trim() }));
+  const arr = [0,1,2].map(i=>({
+    emoji:($('news_e'+i).value||'').trim(),
+    title:($('news_t'+i).value||'').trim(),
+    body:($('news_b'+i).value||'').trim(),
+    url:($('news_u'+i).value||'').trim()
+  }));
   const { error } = await sb.from('app_settings').upsert({ key:'news', value:JSON.stringify(arr) }, { onConflict:'key' });
   if(error){ $('news_status').textContent='儲存失敗：'+error.message; return; }
   $('news_status').textContent='已儲存 ✓　客人頁上方會顯示這些';
