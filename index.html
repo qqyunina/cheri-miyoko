@@ -121,6 +121,20 @@ a.newscard:active{transform:scale(.98)}
 .tag{position:absolute;top:10px;left:10px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:12px;background:var(--gold);color:#fff;box-shadow:0 2px 6px rgba(200,160,90,.4)}
 .tag.hot{background:var(--pink)}
 .tag.soldout{background:#c9aeb8}
+.tag.sale{background:linear-gradient(135deg,#ff9ab8,#e8618c);z-index:2}
+.prod .img{cursor:pointer}
+/* 商品詳情 dialog */
+.dlg{position:fixed;inset:0;z-index:9990;background:rgba(110,70,85,.45);display:flex;align-items:flex-start;justify-content:center;padding:20px 14px;overflow-y:auto}
+.dlg-card{position:relative;width:100%;max-width:440px;background:var(--card);border-radius:24px;padding:18px;box-shadow:0 20px 55px rgba(150,90,115,.4);border:2px solid #fff;margin:auto;display:flex;flex-direction:column;gap:12px}
+.dlg-x{position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(110,70,85,.14);color:var(--pinkd);font-size:16px;font-weight:800;cursor:pointer;z-index:2}
+.dlg-body{display:flex;flex-direction:column;gap:12px}
+.dlg-body .dimg{width:100%;border-radius:16px;object-fit:cover;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+.dlg-body .demoji{font-size:80px;text-align:center;padding:34px;background:radial-gradient(circle at 50% 35%,#fff,var(--pinkl));border-radius:16px}
+.dlg-body .dname{font-size:19px;font-weight:900;color:var(--txd)}
+.dlg-body .dprice{font-size:20px;font-weight:900;color:var(--pinkd)}
+.dlg-body .ddesc{font-size:13.5px;color:var(--tx);line-height:1.75;word-break:break-word}
+.dlg-foot{display:flex;align-items:center;gap:12px;border-top:1px dashed var(--bo);padding-top:14px;position:sticky;bottom:-18px;background:var(--card)}
+.dlg-foot .pbtn{flex:1}
 
 /* Qty stepper */
 .step{display:flex;align-items:center;gap:6px;background:var(--pinkl);border-radius:12px;padding:3px}
@@ -369,6 +383,18 @@ a.newscard:active{transform:scale(.98)}
 
 <div class="toast" id="toast"></div>
 
+<!-- 商品詳情 dialog -->
+<div class="dlg" id="detailModal" style="display:none" onclick="if(event.target===this)closeDetail()">
+  <div class="dlg-card">
+    <button class="dlg-x" onclick="closeDetail()" aria-label="關閉">✕</button>
+    <div class="dlg-body" id="dlgBody"></div>
+    <div class="dlg-foot">
+      <div class="step"><button onclick="dlgQty(-1)">−</button><span id="dlgQ">1</span><button onclick="dlgQty(1)">＋</button></div>
+      <button class="pbtn" onclick="dlgAdd()">加入購物車 🎀</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const IMG = n => `images/${n}.jpg`;
 let PRODUCTS = [
@@ -443,8 +469,8 @@ function renderGrid(){
         ? `<div class="step"><button onclick="chg(${p.id},-1)">−</button><span>${q}</span><button onclick="chg(${p.id},1)">＋</button></div>`
         : `<button class="addbtn" onclick="chg(${p.id},1)">＋</button>`);
     return `<div class="prod">
-      ${p.tag?`<span class="tag ${p.tagt||''}">${p.tag}</span>`:''}
-      <div class="img"><img src="${p.img}" alt="${p.name}" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.remove()"/><span>${p.emoji}</span></div>
+      ${p.onsale?`<span class="tag sale">優惠</span>`:(p.tag?`<span class="tag ${p.tagt||''}">${p.tag}</span>`:'')}
+      <div class="img" onclick="openDetail(${p.id})"><img src="${p.img}" alt="${p.name}" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.remove()"/><span>${p.emoji}</span></div>
       <div class="body">
         <div class="name">${p.name}</div>
         <div class="desc">${p.desc}</div>
@@ -683,7 +709,10 @@ function go(page){
 async function loadCatalog(){
   if(!sb) return;
   try{
-    const { data, error } = await sb.from('active_products').select('*').order('id',{ascending:true});
+    // 只抓輕量欄位（不含 detail_images，避免首頁一次載入大量圖片）；相容尚未加 on_sale 的舊結構
+    const light = 'id,name,tab,series,series_code,price,emoji,image_url,descr,on_sale';
+    let { data, error } = await sb.from('active_products').select(light).order('id',{ascending:true});
+    if(error){ ({ data, error } = await sb.from('active_products').select('id,name,tab,series,series_code,price,emoji,image_url,descr').order('id',{ascending:true})); }
     if(error || !data || !data.length) return;
     PRODUCTS = data.map(r=>({
       id: r.id,
@@ -694,10 +723,45 @@ async function loadCatalog(){
       emoji: r.emoji || '🎀',
       img: r.image_url || '',
       desc: r.descr || '',
+      onsale: !!r.on_sale,
       tag: '', tagt: ''
     }));
     renderCats(); renderGrid();
   }catch(e){ /* 保留預設清單 */ }
+}
+
+// ---- 商品詳情 dialog ----
+let dlgId=null, dlgN=1;
+function dlgImg(u){ return `<img class="dimg" src="${u}" draggable="false" oncontextmenu="return false" onerror="this.remove()"/>`; }
+async function openDetail(id){
+  const p = PRODUCTS.find(x=>x.id===id); if(!p) return;
+  dlgId=id; dlgN=1; if($('dlgQ')) $('dlgQ').textContent='1';
+  const head = (p.img ? dlgImg(p.img) : `<div class="demoji">${p.emoji}</div>`)
+    + `<div class="dname">${esc(p.name)}</div><div class="dprice">$${p.price}</div>`;
+  $('dlgBody').innerHTML = head + `<div class="ddesc">${esc(p.desc||'')}</div>`;
+  $('detailModal').style.display='flex';
+  if(sb){
+    try{
+      const { data } = await sb.from('active_products').select('detail,detail_images').eq('id',id).maybeSingle();
+      if(dlgId!==id) return; // 期間已關閉或換商品
+      if(data){
+        const imgs = Array.isArray(data.detail_images)?data.detail_images:[];
+        const gal = imgs.map(dlgImg).join('');
+        const txt = (data.detail && data.detail.trim()) ? esc(data.detail).replace(/\n/g,'<br>') : esc(p.desc||'');
+        const headImg = p.img ? dlgImg(p.img) : `<div class="demoji">${p.emoji}</div>`;
+        $('dlgBody').innerHTML = headImg + gal + `<div class="dname">${esc(p.name)}</div><div class="dprice">$${p.price}</div><div class="ddesc">${txt}</div>`;
+      }
+    }catch(e){}
+  }
+}
+function closeDetail(){ dlgId=null; $('detailModal').style.display='none'; }
+function dlgQty(d){ dlgN=Math.max(1,dlgN+d); if($('dlgQ')) $('dlgQ').textContent=dlgN; }
+function dlgAdd(){
+  const p = PRODUCTS.find(x=>x.id===dlgId); if(!p){ closeDetail(); return; }
+  const cur = cart[dlgId]?.qty||0;
+  cart[dlgId] = { qty:cur+dlgN, name:p.name, price:p.price, emoji:p.emoji, img:p.img };
+  saveCart(); renderGrid(); renderCart(); updateBadge();
+  closeDetail(); toast('已加入購物車 🎀');
 }
 
 // ---- 首頁 News 三槽（後台可編輯，存在 app_settings.news）----
