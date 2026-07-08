@@ -25,8 +25,20 @@ html,body{height:100%;overflow:hidden}
 body{
   font-family:var(--font);color:var(--tx);
   display:flex;flex-direction:column;height:100dvh;
-  background:linear-gradient(180deg,#cfe4f6 0%,#f6d7e4 48%,#fce4d6 100%);
+  background-color:#fce9f0;
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(201,122,152,.18) 0 2px, transparent 2.8px),
+    radial-gradient(circle at 50% 50%, rgba(217,180,131,.13) 0 1.5px, transparent 2.2px),
+    linear-gradient(180deg,#fdecf2 0%, #f8dae6 50%, #fce6db 100%);
+  background-size:48px 48px, 48px 48px, 100% 100%;
+  background-position:0 0, 24px 24px, 0 0;
   background-attachment:fixed;position:relative;
+}
+/* 柔和蕾絲內框 */
+body::before{
+  content:'';position:fixed;inset:8px;border-radius:24px;pointer-events:none;z-index:0;
+  border:2px solid rgba(255,255,255,.55);
+  box-shadow:inset 0 0 30px rgba(255,255,255,.45), inset 0 0 0 5px rgba(221,139,166,.08);
 }
 .pages,header{position:relative;z-index:1}
 
