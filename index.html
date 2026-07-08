@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+<title>少女午茶派對 · 預購</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Noto+Serif+TC:wght@500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --pink:#dd8ba6;--pinkd:#bd6c88;--pinkl:#f8e4ec;--pinkbg:#fceef4;
+  --blue:#b9cfe6;--bluel:#e9f0f8;
+  --gold:#d9b483;--goldl:#f6ecdb;
+  --cream:#fdf6f2;--card:#fffdfb;
+  --tx:#8a6270;--txd:#6e4655;--mu:#c2a0af;--bo:#f0d9e3;
+  --sh:0 8px 26px rgba(200,140,165,.16);
+  --font:'PingFang TC','Segoe UI',-apple-system,sans-serif;
+  --serif:'Noto Serif TC',serif;--script:'Dancing Script',cursive;
+}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:var(--font);color:var(--tx);
+  display:flex;flex-direction:column;height:100dvh;
+  background:linear-gradient(180deg,#cfe4f6 0%,#f6d7e4 48%,#fce4d6 100%);
+  background-attachment:fixed;position:relative;
+}
+.pages,header{position:relative;z-index:1}
+
+/* Header */
+header{position:relative;display:flex;align-items:center;justify-content:flex-end;padding:0 16px;height:70px;flex-shrink:0;background:rgba(255,253,251,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--bo)}
+.logo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;cursor:pointer}
+.logo img{height:56px;width:auto}
+.logo b{font-family:var(--serif);font-size:18px;font-weight:900;letter-spacing:1px;color:var(--pinkd)}
+.hbtns{display:flex;gap:8px}
+.hbtn{position:relative;width:40px;height:40px;border-radius:50%;background:var(--pinkl);border:1.5px solid var(--bo);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.hbtn:active{transform:scale(.9)}
+.badge{position:absolute;top:-3px;right:-3px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--pink);color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(220,100,150,.4)}
+.badge.hide{display:none}
+
+/* Pages */
+.pages{flex:1;min-height:0;overflow:hidden;position:relative}
+.page{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
+.page.active{display:flex;animation:pagein .32s ease}
+@keyframes pagein{from{opacity:0}to{opacity:1}}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 40px}
+
+/* Hero */
+.hero{position:relative;margin:0 auto 18px;max-width:1160px;padding:30px 22px 24px;border-radius:28px;text-align:center;
+  background:
+    radial-gradient(circle at 18px 18px, rgba(255,255,255,.55) 0 2.2px, transparent 2.6px) 0 0/24px 24px,
+    linear-gradient(160deg,rgba(255,253,251,.95),rgba(248,228,236,.95));
+  border:1.5px solid #fff;box-shadow:0 14px 34px rgba(200,140,165,.22),inset 0 0 0 4px rgba(255,255,255,.5);overflow:hidden;backdrop-filter:blur(2px)}
+.hero::before,.hero::after{content:'🎀';position:absolute;font-size:24px;opacity:.45;filter:drop-shadow(0 2px 3px rgba(200,140,165,.3))}
+.hero::before{top:12px;left:14px;transform:rotate(-20deg)}
+.hero::after{bottom:12px;right:14px;transform:rotate(20deg)}
+.hero .script{font-family:var(--script);font-size:26px;font-weight:700;color:var(--pink);line-height:1;margin-bottom:4px}
+.hero h1{font-family:var(--serif);font-size:22px;font-weight:900;color:var(--pinkd);letter-spacing:3px;margin-bottom:6px}
+.hero .tagline{font-size:12.5px;font-weight:700;letter-spacing:3px;color:var(--txd);margin-bottom:10px}
+.hero .date{font-family:var(--serif);font-size:16px;font-weight:900;color:var(--pink);line-height:1;letter-spacing:2px}
+.hero .loc{margin-top:12px;font-size:12.5px;color:var(--txd);line-height:1.7}
+.hero .loc b{color:var(--pinkd)}
+.hero .rule{position:relative;width:70px;height:1.5px;background:linear-gradient(90deg,transparent,var(--pink),transparent);opacity:.7;margin:16px auto 0}
+.hero .rule::after{content:'🎀';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:15px}
+
+/* Categories */
+.cats{display:flex;gap:9px;overflow-x:auto;padding:2px 2px 14px;-webkit-overflow-scrolling:touch;width:100%;max-width:1160px;margin:0 auto}
+.cat{flex-shrink:0;padding:8px 17px;border-radius:22px;background:rgba(255,255,255,.7);border:1.5px solid var(--bo);font-size:13px;font-weight:700;color:var(--mu);cursor:pointer;white-space:nowrap;transition:.18s}
+.cat:active{transform:scale(.94)}
+.cat.active{background:linear-gradient(135deg,var(--pink),var(--pinkd));border-color:var(--pink);color:#fff;box-shadow:0 5px 14px rgba(220,120,160,.4)}
+
+/* Product grid */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;width:100%;max-width:1160px;margin:0 auto}
+@media(min-width:600px){.grid{grid-template-columns:repeat(3,1fr);gap:16px}}
+@media(min-width:960px){.grid{grid-template-columns:repeat(4,1fr);gap:18px}}
+.prod{position:relative;background:var(--card);border-radius:22px;overflow:hidden;box-shadow:var(--sh);display:flex;flex-direction:column;border:2px solid #fff;transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s;animation:cardin .5s both}
+@keyframes cardin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.prod:hover{transform:translateY(-5px);box-shadow:0 16px 32px rgba(200,140,165,.28)}
+.prod:active{transform:translateY(-1px) scale(.99)}
+.prod .img{position:relative;aspect-ratio:1;font-size:60px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,#fff,var(--pinkl));overflow:hidden}
+.prod .img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .35s ease}
+.prod:hover .img img{transform:scale(1.06)}
+.prod .body{padding:11px 13px 14px;display:flex;flex-direction:column;flex:1}
+.prod .name{font-size:14.5px;font-weight:700;color:var(--txd);margin-bottom:4px}
+.prod .desc{font-size:11px;color:var(--mu);line-height:1.45;margin-bottom:10px;flex:1}
+.prod .row{display:flex;align-items:center;justify-content:space-between}
+.prod .price{font-size:17px;font-weight:900;color:var(--pinkd)}
+.prod .price small{font-size:11px;font-weight:600;color:var(--mu)}
+.addbtn{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--pink),var(--pinkd));color:#fff;border:none;font-size:22px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(220,120,160,.35);transition:box-shadow .2s,transform .1s}
+.addbtn:hover{box-shadow:0 6px 16px rgba(220,120,160,.55)}
+.addbtn:active{transform:scale(.88)}
+.tag{position:absolute;top:10px;left:10px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:12px;background:var(--gold);color:#fff;box-shadow:0 2px 6px rgba(200,160,90,.4)}
+.tag.hot{background:var(--pink)}
+.tag.soldout{background:#c9aeb8}
+
+/* Qty stepper */
+.step{display:flex;align-items:center;gap:6px;background:var(--pinkl);border-radius:12px;padding:3px}
+.step button{width:28px;height:28px;border-radius:9px;border:none;background:#fff;font-size:17px;font-weight:800;cursor:pointer;color:var(--pinkd);display:flex;align-items:center;justify-content:center}
+.step span{font-size:14px;font-weight:900;min-width:18px;text-align:center;color:var(--txd)}
+
+/* Cart */
+.citem{display:flex;gap:12px;align-items:center;background:var(--card);border-radius:18px;padding:12px;margin-bottom:11px;box-shadow:var(--sh);border:2px solid #fff}
+.citem .ci{position:relative;width:56px;height:56px;border-radius:15px;background:radial-gradient(circle,#fff,var(--pinkl));display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;overflow:hidden}
+.citem .ci img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.citem .cn{flex:1}
+.citem .cn b{font-size:14px;display:block;margin-bottom:3px;color:var(--txd)}
+.citem .cn .cp{font-size:13px;color:var(--pinkd);font-weight:800}
+.empty{text-align:center;padding:64px 20px;color:var(--mu);font-weight:600}
+.empty .e{font-size:56px;margin-bottom:14px}
+
+/* Form */
+.field{margin-bottom:15px}
+.field label{display:block;font-size:13px;font-weight:800;margin-bottom:7px;color:var(--txd)}
+.field label .req{color:var(--pink)}
+.field input,.field textarea,.field select{width:100%;padding:13px;border-radius:14px;border:1.5px solid var(--bo);font-size:15px;font-family:inherit;background:#fff;color:var(--txd)}
+.field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--pink)}
+.field textarea{resize:none;height:72px}
+.field .hint{font-size:11px;color:var(--mu);margin-top:5px}
+
+/* Summary bar */
+.bar{position:absolute;left:0;right:0;bottom:0;padding:13px 16px calc(14px + env(safe-area-inset-bottom));background:rgba(255,253,251,.95);backdrop-filter:blur(8px);border-top:1.5px solid var(--bo);display:flex;align-items:center;gap:12px}
+.bar .tot{flex:1}
+.bar .tot small{font-size:11px;color:var(--mu);display:block;font-weight:600}
+.bar .tot b{font-size:21px;color:var(--pinkd);font-weight:900}
+.pbtn{padding:15px 26px;border-radius:16px;background:linear-gradient(135deg,var(--pink),var(--pinkd));color:#fff;border:none;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 6px 16px rgba(220,120,160,.4)}
+.pbtn:active{transform:scale(.97)}
+.pbtn:disabled{background:var(--mu);opacity:.5;box-shadow:none}
+.pbtn.full{flex:1;text-align:center;width:100%}
+
+/* Success */
+.success{text-align:center;padding:38px 24px}
+.success .ok{width:92px;height:92px;border-radius:50%;background:radial-gradient(circle,#fff,var(--pinkl));color:var(--pink);font-size:46px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:var(--sh);border:3px solid #fff}
+.success h2{font-family:var(--serif);font-size:24px;letter-spacing:2px;margin-bottom:6px;color:var(--pinkd);font-weight:900}
+.success .ono{font-size:14px;color:var(--mu);margin-bottom:22px}
+.success .ono b{color:var(--pinkd);font-family:monospace;font-size:17px}
+.rcpt{text-align:left;background:var(--card);border-radius:18px;padding:18px;box-shadow:var(--sh);margin-bottom:22px;border:2px solid #fff}
+.rcpt .rrow{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;color:var(--mu)}
+.rcpt .rrow b{color:var(--txd)}
+.rcpt hr{border:none;border-top:1.5px dashed var(--bo);margin:9px 0}
+.shipnote{background:linear-gradient(160deg,var(--goldl),#fff);border:1.5px solid var(--gold);border-radius:18px;padding:18px;margin-bottom:16px;box-shadow:var(--sh)}
+.shipnote p{font-size:14px;color:var(--txd);line-height:1.85;margin-bottom:14px}
+.shipnote p b{color:var(--pinkd)}
+.shipnote .pbtn.full{display:block;text-decoration:none;background:linear-gradient(135deg,var(--gold),#c79a5f)}
+.emailnote{font-size:12.5px;color:var(--txd);background:var(--bluel);border:1.5px solid var(--blue);border-radius:14px;padding:11px 14px;margin-bottom:16px;line-height:1.6}
+.emailnote b{color:#5b8fc0}
+.emailnote.warn{background:#fff6d9;border-color:var(--gold);color:#a87a2a}
+.emailnote.warn b{color:#a87a2a}
+
+/* Section title */
+.stitle{font-family:var(--serif);font-size:17px;font-weight:900;letter-spacing:1px;margin:2px 2px 15px;display:flex;align-items:center;gap:8px;color:var(--pinkd)}
+.back{background:var(--pinkl);border:none;width:34px;height:34px;border-radius:11px;font-size:20px;cursor:pointer;color:var(--pinkd);display:flex;align-items:center;justify-content:center}
+
+/* Orders list */
+.ocard{background:var(--card);border-radius:18px;padding:15px;margin-bottom:13px;box-shadow:var(--sh);border:2px solid #fff}
+.ocard .oh{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.ocard .oh b{font-family:monospace;color:var(--pinkd);font-size:14px}
+.ostat{font-size:11px;font-weight:800;padding:4px 11px;border-radius:20px;background:var(--goldl);color:var(--gold)}
+.ostat.done{background:var(--bluel);color:var(--blue)}
+.oli{font-size:13px;color:var(--mu);padding:2px 0}
+.oship{display:inline-block;margin-top:11px;font-size:12.5px;font-weight:800;color:#c79a5f;background:var(--goldl);border:1.5px solid var(--gold);border-radius:12px;padding:9px 14px;text-decoration:none}
+.oship:active{transform:scale(.97)}
+.thanksnote{text-align:center;font-family:var(--serif);font-size:14px;font-weight:700;color:var(--pinkd);line-height:1.9;margin-top:26px;padding:16px 14px;background:linear-gradient(160deg,var(--pinkbg),#fff);border:1.5px solid var(--bo);border-radius:18px}
+.cancelnote{text-align:center;font-size:12px;color:var(--mu);margin-top:14px;padding:0 8px;line-height:1.8}
+.cancelnote a{color:var(--pinkd);font-weight:800;text-decoration:underline}
+
+/* Modal */
+.mask{position:fixed;inset:0;background:rgba(140,90,110,.35);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+.mask.show{display:flex}
+.modal{width:100%;max-width:360px;background:var(--card);border-radius:26px;padding:26px 22px;box-shadow:0 20px 50px rgba(180,100,140,.35);border:2px solid #fff;position:relative}
+.modal::before{content:'🎀';position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:34px}
+.mclose{position:absolute;top:12px;right:14px;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--bo);background:var(--pinkl);color:var(--pinkd);font-size:20px;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+.mclose:active{transform:scale(.9)}
+.modal h3{font-family:var(--serif);text-align:center;font-size:20px;font-weight:900;letter-spacing:1px;color:var(--pinkd);margin:8px 0 4px}
+.modal .sub{text-align:center;font-size:12.5px;color:var(--mu);margin-bottom:20px;line-height:1.5}
+
+.igwrap{position:relative}
+.igwrap span{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--mu);font-weight:700}
+.igwrap input{padding-left:28px}
+
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:var(--txd);color:#fff;padding:11px 20px;border-radius:24px;font-size:13px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:99}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Payment */
+.ono2{text-align:center;font-size:13px;color:var(--mu);margin:2px 0 16px}
+.ono2 b{color:var(--pinkd);font-family:monospace;font-size:15px}
+.paybox{background:var(--card);border-radius:20px;padding:18px;box-shadow:var(--sh);border:2px solid #fff;margin-bottom:18px}
+.paybox .prow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;padding:8px 0;color:var(--mu);border-bottom:1px dashed var(--bo)}
+.paybox .prow b{color:var(--txd);font-weight:800}
+.paybox .prow.acct b{font-family:monospace;font-size:15px;letter-spacing:.5px}
+.paybox .prow .amt{color:var(--pinkd);font-size:17px}
+.copy{border:none;background:var(--pink);color:#fff;font-size:12px;font-weight:800;padding:5px 12px;border-radius:12px;cursor:pointer}
+.copy:active{transform:scale(.92)}
+.qr{display:flex;align-items:center;justify-content:center;padding:16px 0 4px}
+.qr img{width:180px;height:180px;object-fit:contain;border-radius:14px;background:#fff;border:1.5px solid var(--bo)}
+.qrph{width:180px;height:180px;border-radius:14px;border:2px dashed var(--pink);background:var(--pinkbg);display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;font-weight:800;color:var(--pinkd);line-height:1.6}
+.onsite{display:flex;align-items:center;gap:9px;background:var(--bluel);border:1.5px solid var(--blue);border-radius:14px;padding:12px 14px;margin-bottom:15px;font-size:13.5px;color:var(--txd);cursor:pointer}
+.onsite input{width:19px;height:19px;accent-color:var(--pink);flex-shrink:0}
+.onsite b{color:#5b8fc0}
+.shipbox{text-align:center;background:var(--card);border-radius:20px;padding:30px 22px;box-shadow:var(--sh);border:2px solid #fff}
+.shipbox .e{font-size:54px;margin-bottom:14px}
+.shipbox p{font-size:14px;color:var(--txd);line-height:1.9;margin-bottom:22px}
+.shipbox .pbtn.full{display:block;text-decoration:none;margin-bottom:14px}
+.shipbox .hint{font-size:12px;color:var(--mu)}
+.userchip{display:flex;align-items:center;gap:6px;background:var(--pinkl);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--pinkd);margin-bottom:14px}
+.userchip .lo{margin-left:auto;color:var(--mu);text-decoration:underline;cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo" onclick="go('shop')" title="回商品頁"><img src="logo.png" alt="Cheri Miyoko" onerror="this.parentNode.innerHTML='<b>少女午茶派對</b>'"/></div>
+  <div class="hbtns">
+    <button class="hbtn" onclick="go('cart')" title="購物車">🛒<span class="badge hide" id="badge">0</span></button>
+    <button class="hbtn" onclick="go('orders')" title="我的訂單">🎂</button>
+  </div>
+</header>
+
+<div class="pages">
+  <!-- SHOP -->
+  <div class="page active" id="p-shop">
+    <div class="scroll">
+      <div class="hero">
+        <div class="script">Cheri Miyoko</div>
+        <h1>少女午茶派對</h1>
+        <div class="tagline">市集專屬下單頁</div>
+        <div class="date">7 / 17 – 7 / 19</div>
+        <div class="loc">📍 <b>中山捷運站 6 號出口</b><br>台北市南京西路 64 巷 9 弄 17 號</div>
+        <div class="rule"></div>
+      </div>
+      <div class="cats" id="cats"></div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+
+  <!-- CART -->
+  <div class="page" id="p-cart">
+    <div class="scroll">
+      <div class="stitle"><button class="back" onclick="go('shop')">‹</button>購物車</div>
+      <div id="cartList"></div>
+    </div>
+    <div class="bar" id="cartBar">
+      <div class="tot"><small>小計 · <span id="cartCount">0</span> 份</small><b>$<span id="cartTotal">0</span></b></div>
+      <button class="pbtn" id="toCheckout" onclick="go('checkout')">前往結帳</button>
+    </div>
+  </div>
+
+  <!-- CHECKOUT -->
+  <div class="page" id="p-checkout">
+    <div class="scroll">
+      <div class="stitle"><button class="back" onclick="go('cart')">‹</button>填寫取貨資料</div>
+      <div class="userchip" id="coUser"></div>
+      <div class="field">
+        <label>取貨人姓名 <span class="req">*</span></label>
+        <input id="fName"/>
+      </div>
+      <div class="field">
+        <label>備註（選填）</label>
+        <textarea id="fNote" placeholder=""></textarea>
+      </div>
+      <div class="rcpt" id="checkoutSummary"></div>
+    </div>
+    <div class="bar">
+      <div class="tot"><small>總額</small><b>$<span id="coTotal">0</span></b></div>
+      <button class="pbtn" onclick="submitOrder()">確認送出 🎀</button>
+    </div>
+  </div>
+
+  <!-- PAYMENT -->
+  <div class="page" id="p-pay">
+    <div class="scroll">
+      <div class="stitle"><button class="back" onclick="go('checkout')">‹</button>匯款付款</div>
+      <div class="ono2">訂單編號 <b id="payNo"></b></div>
+      <div class="paybox">
+        <div class="prow"><span>銀行</span><b id="bankName">台新銀行（812）敦南分行（0023）</b></div>
+        <div class="prow acct"><span>帳號</span><b id="bankAcct">2888-10-0452779-1</b><button class="copy" onclick="copyAcct()">複製</button></div>
+        <div class="prow"><span>應匯金額</span><b class="amt">$<span id="payTotal">0</span></b></div>
+        <div class="qr"><img src="pay-qr.jpg" alt="匯款 QR" onerror="this.parentNode.innerHTML='<div class=&quot;qrph&quot;>放置匯款 QR<br>pay-qr.jpg</div>'"/></div>
+      </div>
+      <label class="onsite">
+        <input type="checkbox" id="payOnSite" onchange="toggleOnSite()"/>
+        <span>我要<b>現場付款</b>（免填匯款後 5 碼）</span>
+      </label>
+      <div class="field" id="last5Field">
+        <label>匯款帳號後 5 碼 <span class="req">*</span></label>
+        <input id="fLast5" inputmode="numeric" maxlength="5" placeholder="12345"/>
+        <div class="hint">請先完成匯款，再填入你的帳號末 5 碼以利對帳 🎀</div>
+      </div>
+    </div>
+    <div class="bar">
+      <div class="tot"><small>總額</small><b>$<span id="payBarTotal">0</span></b></div>
+      <button class="pbtn" onclick="confirmPay()">完成訂購 🎀</button>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="page" id="p-success">
+    <div class="scroll">
+      <div class="success">
+        <div class="ok">🎀</div>
+        <h2>完成訂購！</h2>
+        <div class="ono">訂單編號 <b id="okNo"></b></div>
+        <div class="shipnote">
+          <p>最後一步 📦</p>
+          <a class="pbtn full" href="https://myship.7-11.com.tw/cart/confirm/GM2512220658282" target="_blank" rel="noopener">前往賣貨便下單 ›</a>
+        </div>
+        <div class="emailnote" id="emailNote"></div>
+        <div class="rcpt" id="okRcpt"></div>
+        <button class="pbtn full" onclick="go('orders')">查看我的訂單</button>
+        <div class="cancelnote">若有任何問題，請私訊 <a href="https://www.instagram.com/cheri_miyoko_?igsh=YzRpaTI2eG1vNThx" target="_blank" rel="noopener">櫻櫻美黛子</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDERS -->
+  <div class="page" id="p-orders">
+    <div class="scroll">
+      <div class="stitle"><button class="back" onclick="go('shop')">‹</button>我的訂單</div>
+      <div class="userchip" id="ordUser"></div>
+      <div id="ordersList"></div>
+      <div class="thanksnote">🎀 謝謝您的喜愛與訂購！<br>期待我的魔法能帶給您滿滿的幸福感 💗</div>
+      <div class="cancelnote">如要取消訂單，請聯絡 <a href="https://www.instagram.com/cheri_miyoko_?igsh=YzRpaTI2eG1vNThx" target="_blank" rel="noopener">櫻櫻美黛子</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN MODAL -->
+<div class="mask" id="loginMask">
+  <div class="modal">
+    <button class="mclose" onclick="closeLogin()" aria-label="關閉">×</button>
+    <h3>歡迎來到午茶派對</h3>
+    <div class="sub">留下聯絡方式，攤主才能與你確認預購 🍓</div>
+    <div class="field">
+      <label>Instagram 帳號 <span class="req">*</span></label>
+      <div class="igwrap"><span>@</span><input id="lIg" placeholder="your_ig"/></div>
+    </div>
+    <div class="field">
+      <label>Email <span class="req">*</span></label>
+      <input id="lEmail" type="email" inputmode="email" placeholder="you@example.com"/>
+    </div>
+    <button class="pbtn full" onclick="doLogin()">進入派對 🎀</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const IMG = n => `images/${n}.jpg`;
+const PRODUCTS = [
+  {id:1, name:'蕾絲天鵝愛心包', cat:'口金包', price:1280, emoji:'🦢', img:IMG('bag01'), desc:'蕾絲荷葉＋羊毛氈天鵝，珍珠鏈', tag:'招牌', tagt:'hot'},
+  {id:2, name:'蓬蓬雲朵肩背包', cat:'背帶', price:780, emoji:'☁️', img:IMG('bag02'), desc:'軟綿雲朵造型，超好拍', tag:'人氣', tagt:'hot'},
+  {id:3, name:'緞帶蝴蝶結髮帶', cat:'髮帶', price:280, emoji:'🎀', img:IMG('bag03'), desc:'可調鬆緊，日常百搭', tag:''},
+  {id:4, name:'蕾絲珍珠蓬蓬卡套', cat:'蓬蓬卡套', price:320, emoji:'👛', img:IMG('bag04'), desc:'蕾絲＋珍珠釦，悠遊卡款', tag:'限量', tagt:''},
+  {id:5, name:'愛心亮片蓬蓬卡套', cat:'蓬蓬卡套', price:300, emoji:'💗', img:IMG('bag05'), desc:'愛心亮片，派對必備', tag:''},
+  {id:6, name:'草莓托特包', cat:'托特包', price:720, emoji:'🍓', img:IMG('bag06'), desc:'帆布刺繡草莓，容量大', tag:''},
+  {id:7, name:'格紋午茶托特包', cat:'托特包', price:850, emoji:'🧺', img:IMG('bag07'), desc:'英倫格紋，附內袋', tag:''},
+  {id:8, name:'蕾絲波奈特帽', cat:'波奈特帽', price:680, emoji:'🌸', img:IMG('bag08'), desc:'法式蕾絲，附綁帶', tag:''},
+  {id:9, name:'毛絨兔兔髮夾', cat:'髮夾', price:180, emoji:'🐰', img:IMG('bag09'), desc:'毛絨兔耳，超吸睛', tag:'人氣', tagt:'hot'},
+  {id:10, name:'珍珠愛心項鍊', cat:'項鍊', price:420, emoji:'📿', img:IMG('bag10'), desc:'珍珠鏈＋愛心墜', tag:''},
+  {id:11, name:'緞帶珍珠戒指', cat:'戒指', price:260, emoji:'💍', img:IMG('bag11'), desc:'可調式，緞帶珍珠', tag:''},
+  {id:12, name:'蕾絲口金零錢包', cat:'口金包', price:480, emoji:'🎁', img:IMG('bag12'), desc:'口金開口，附掛環', tag:'售完', tagt:'soldout', soldout:true},
+];
+const CATS = ['全部','聯名限定','現貨專區','口金包','托特包','波奈特帽','髮帶','髮夾','項鍊','戒指','蓬蓬卡套','背帶'];
+
+let cart = JSON.parse(localStorage.getItem('mkt_cart')||'{}');
+let orders = JSON.parse(localStorage.getItem('mkt_orders')||'[]');
+let user = JSON.parse(localStorage.getItem('mkt_user')||'null');
+let curCat = '全部';
+
+const $ = id => document.getElementById(id);
+const saveCart = () => localStorage.setItem('mkt_cart',JSON.stringify(cart));
+const saveOrders = () => localStorage.setItem('mkt_orders',JSON.stringify(orders));
+const money = n => n.toLocaleString();
+const SHIP_FEE = 100;                       // 賣貨便尾款（到店取貨時付）
+const payable = () => Math.max(0, cartTotal() - SHIP_FEE);
+
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),1600); }
+
+/* ---- Login ---- */
+function requireLogin(){
+  if(user) return true;
+  $('loginMask').classList.add('show');
+  return false;
+}
+function closeLogin(){ $('loginMask').classList.remove('show'); pendingPage=null; }
+function doLogin(){
+  const ig=$('lIg').value.trim().replace(/^@/,''), email=$('lEmail').value.trim();
+  if(!ig){ toast('請填寫 IG 帳號'); $('lIg').focus(); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast('請填寫正確 Email'); $('lEmail').focus(); return; }
+  user = {ig, email};
+  localStorage.setItem('mkt_user',JSON.stringify(user));
+  $('loginMask').classList.remove('show');
+  toast('登入成功 🎀');
+  renderUserChips();
+  if(pendingPage){ const p=pendingPage; pendingPage=null; go(p); }
+}
+function logout(){ user=null; localStorage.removeItem('mkt_user'); renderUserChips(); toast('已登出'); go('shop'); }
+function userChipHTML(){ return `🎀 @${user.ig}<span class="lo" onclick="logout()">登出</span>`; }
+function renderUserChips(){
+  if(!user) return;
+  $('coUser').innerHTML = userChipHTML();
+  $('ordUser').innerHTML = userChipHTML();
+}
+
+/* ---- Shop ---- */
+function renderCats(){
+  $('cats').innerHTML = CATS.map(c=>`<div class="cat ${c===curCat?'active':''}" onclick="setCat('${c}')">${c}</div>`).join('');
+}
+function setCat(c){ curCat=c; renderCats(); renderGrid(); }
+
+function renderGrid(){
+  const list = PRODUCTS.filter(p=>curCat==='全部'||p.cat===curCat);
+  $('grid').innerHTML = list.map(p=>{
+    const q = cart[p.id]?.qty||0;
+    const ctrl = p.soldout
+      ? `<span style="font-size:12px;color:#c9aeb8;font-weight:800">已售完</span>`
+      : (q>0
+        ? `<div class="step"><button onclick="chg(${p.id},-1)">−</button><span>${q}</span><button onclick="chg(${p.id},1)">＋</button></div>`
+        : `<button class="addbtn" onclick="chg(${p.id},1)">＋</button>`);
+    return `<div class="prod">
+      ${p.tag?`<span class="tag ${p.tagt||''}">${p.tag}</span>`:''}
+      <div class="img"><img src="${p.img}" alt="${p.name}" loading="lazy" onerror="this.remove()"/><span>${p.emoji}</span></div>
+      <div class="body">
+        <div class="name">${p.name}</div>
+        <div class="desc">${p.desc}</div>
+        <div class="row">
+          <div class="price">$${p.price}<small>/份</small></div>
+          ${ctrl}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function chg(id,d){
+  const p = PRODUCTS.find(x=>x.id===id);
+  const cur = cart[id]?.qty||0;
+  const next = cur+d;
+  if(next<=0){ delete cart[id]; } else { cart[id]={qty:next, name:p.name, price:p.price, emoji:p.emoji, img:p.img}; }
+  saveCart(); renderGrid(); renderCart(); updateBadge();
+  if(d>0 && cur===0) toast('已加入購物車 🎀');
+}
+
+function cartArr(){ return Object.entries(cart).map(([id,v])=>({id,...v})); }
+function cartTotal(){ return cartArr().reduce((s,i)=>s+i.price*i.qty,0); }
+function cartCount(){ return cartArr().reduce((s,i)=>s+i.qty,0); }
+function updateBadge(){ const n=cartCount(),b=$('badge'); b.textContent=n; b.classList.toggle('hide',n===0); }
+
+function renderCart(){
+  const arr = cartArr();
+  if(arr.length===0){
+    $('cartList').innerHTML = `<div class="empty"><div class="e">🧁</div>購物車還是空的<br>快去挑選午茶點心吧！</div>`;
+    $('cartBar').style.display='none'; return;
+  }
+  $('cartBar').style.display='flex';
+  $('cartList').innerHTML = arr.map(i=>`
+    <div class="citem">
+      <div class="ci"><img src="${i.img}" alt="" onerror="this.remove()"/><span>${i.emoji}</span></div>
+      <div class="cn"><b>${i.name}</b><div class="cp">$${i.price} × ${i.qty} = $${money(i.price*i.qty)}</div></div>
+      <div class="step"><button onclick="chg(${i.id},-1)">−</button><span>${i.qty}</span><button onclick="chg(${i.id},1)">＋</button></div>
+    </div>`).join('');
+  $('cartCount').textContent = cartCount();
+  $('cartTotal').textContent = money(cartTotal());
+}
+
+function renderCheckout(){
+  const arr = cartArr();
+  $('checkoutSummary').innerHTML =
+    arr.map(i=>`<div class="rrow"><span>${i.name} ×${i.qty}</span><b>$${money(i.price*i.qty)}</b></div>`).join('')
+    + `<hr>`
+    + `<div class="rrow"><span>商品合計</span><b>$${money(cartTotal())}</b></div>`
+    + `<div class="rrow"><span>賣貨便尾款</span><b>−$${money(SHIP_FEE)}</b></div>`
+    + `<div class="rrow" style="font-size:15px"><b>總額</b><b style="color:var(--pinkd)">$${money(payable())}</b></div>`;
+  $('coTotal').textContent = money(payable());
+}
+
+let curOrder = null;
+async function nextOrderNo(){
+  try{
+    if(sb){
+      const { data, error } = await sb.rpc('next_order_no');
+      if(!error && data!=null) return 'CM' + String(data).padStart(5,'0');
+    }
+  }catch(e){}
+  return 'CM' + Date.now().toString().slice(-8); // 雲端計數器未設定時的備援：仍給唯一編號
+}
+async function submitOrder(){
+  if(!requireLogin()){ pendingPage='checkout'; return; }
+  const name=$('fName').value.trim(), userNote=$('fNote').value.trim();
+  if(!name){ toast('請填寫取貨人姓名'); $('fName').focus(); return; }
+  const note = userNote;
+  const no = await nextOrderNo();
+  curOrder = { no, name, ig:user.ig, email:user.email, note, last5:'', items:cartArr(), total:payable(), status:'待匯款', time:new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) };
+  orders.unshift(curOrder);
+  cart={}; saveCart(); saveOrders(); updateBadge();
+  $('payNo').textContent = no;
+  $('payTotal').textContent = money(curOrder.total);
+  $('payBarTotal').textContent = money(curOrder.total);
+  $('fLast5').value = '';
+  $('payOnSite').checked = false; toggleOnSite();
+  go('pay');
+}
+
+function copyAcct(){
+  const t = $('bankAcct').textContent.replace(/[^\d]/g,'');
+  navigator.clipboard?.writeText(t).then(()=>toast('已複製帳號 🎀'),()=>toast(t));
+}
+
+/* ---- Supabase 雲端訂單 ---- */
+const SUPABASE_URL = 'https://smrxhnidqqgpccztyesg.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_mJyhbGar7MK86XkzdjdzYg_fYoVOJ3h';
+const sb = (window.supabase && SUPABASE_URL) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+async function saveOrderToCloud(o){
+  if(!sb) return;
+  try{
+    const { error } = await sb.from('orders').insert({
+      no:o.no, name:o.name, ig:o.ig, email:o.email,
+      note:o.note, last5:o.last5, items:o.items, total:o.total, status:o.status
+    });
+    if(error) console.warn('雲端存單失敗', error);
+  }catch(e){ console.warn('雲端存單錯誤', e); }
+}
+
+/* ---- EmailJS 設定（需攤主填入自己的金鑰才會真的寄信）---- */
+const EMAILJS = { publicKey:'', serviceId:'', templateId:'' };
+const SHIP_URL = 'https://myship.7-11.com.tw/cart/confirm/GM2512220658282';
+let emailjsReady = false;
+try{ if(window.emailjs && EMAILJS.publicKey){ emailjs.init({publicKey:EMAILJS.publicKey}); emailjsReady = true; } }catch(e){}
+
+function toggleOnSite(){
+  $('last5Field').style.display = $('payOnSite').checked ? 'none' : 'block';
+}
+function confirmPay(){
+  if($('payOnSite').checked){
+    curOrder.last5 = '現場付款';
+  }else{
+    const last5 = $('fLast5').value.trim();
+    if(!/^\d{5}$/.test(last5)){ toast('請填寫匯款帳號後 5 碼'); $('fLast5').focus(); return; }
+    curOrder.last5 = last5;
+  }
+  curOrder.status = '待出貨';
+  saveOrders();
+  const o = curOrder;
+  saveOrderToCloud(o);
+  $('okNo').textContent = o.no;
+  $('okRcpt').innerHTML =
+    `<div class="rrow"><span>取貨人</span><b>${o.name}</b></div>
+     <div class="rrow"><span>Instagram</span><b>@${o.ig}</b></div>
+     <div class="rrow"><span>Email</span><b>${o.email}</b></div>
+     ${o.last5==='現場付款'?`<div class="rrow"><span>付款方式</span><b>現場付款</b></div>`:`<div class="rrow"><span>匯款後 5 碼</span><b>${o.last5}</b></div>`}
+     ${o.note?`<div class="rrow"><span>備註</span><b>${o.note}</b></div>`:''}
+     <hr>
+     ${o.items.map(i=>`<div class="rrow"><span>${i.name} ×${i.qty}</span><b>$${money(i.price*i.qty)}</b></div>`).join('')}
+     <hr>
+     <div class="rrow"><span>商品合計</span><b>$${money(o.total + SHIP_FEE)}</b></div>
+     <div class="rrow"><span>賣貨便尾款</span><b>−$${money(SHIP_FEE)}</b></div>
+     <div class="rrow" style="font-size:15px"><b>已支付金額</b><b style="color:var(--pinkd)">$${money(o.total)}</b></div>`;
+  go('success');
+  sendOrderEmail(o);
+}
+
+function sendOrderEmail(o){
+  const note = $('emailNote');
+  if(!emailjsReady){
+    note.className = 'emailnote warn';
+    note.innerHTML = `📧 訂單資訊已為你保留。<b>請記得完成上方賣貨便下單</b> 🎀`;
+    return;
+  }
+  note.className = 'emailnote';
+  note.innerHTML = `📧 正在將購買資訊寄到 <b>${o.email}</b>…`;
+  const items = o.items.map(i=>`${i.name} ×${i.qty} = $${money(i.price*i.qty)}`).join('\n');
+  emailjs.send(EMAILJS.serviceId, EMAILJS.templateId, {
+    to_email:o.email, to_name:o.name, order_no:o.no,
+    items, total:money(o.total), last5:o.last5,
+    note:o.note||'—', ship_url:SHIP_URL,
+  }).then(()=>{
+    note.innerHTML = `📧 已寄送購買資訊到 <b>${o.email}</b>，內含賣貨便連結，可用手機開信完成下單 🎀`;
+  }).catch(()=>{
+    note.className = 'emailnote warn';
+    note.innerHTML = `📧 自動寄信失敗，但訂單已保留。<b>請直接用上方按鈕完成賣貨便下單</b> 🎀`;
+  });
+}
+
+function myOrders(){ return user ? orders.filter(o=>o.email===user.email) : []; }
+
+/* 向雲端核對「我的訂單」狀態：只送訂單編號、只回傳 {no,status}，不含個資。
+   後台改狀態→這裡跟著更新；後台刪除→本機這筆一起移除。SQL 未建立時安靜略過。 */
+async function syncOrdersFromCloud(){
+  if(!sb || !user) return;
+  const mine = myOrders();
+  if(!mine.length) return;
+  const nos = mine.map(o=>o.no);
+  try{
+    const { data, error } = await sb.rpc('get_order_status', { nos });
+    if(error || !Array.isArray(data)) return;
+    const cloud = {}; data.forEach(r=>cloud[r.no]={status:r.status, myship:!!r.myship_done});
+    let changed = false;
+    orders = orders.filter(o=>{
+      if(nos.includes(o.no) && !(o.no in cloud)){ changed=true; return false; } // 後台已刪除
+      return true;
+    });
+    orders.forEach(o=>{
+      const c = cloud[o.no];
+      if(!c) return;
+      if(c.status && c.status!==o.status){ o.status=c.status; changed=true; }
+      if(c.myship !== !!o.myship){ o.myship=c.myship; changed=true; }
+    });
+    if(changed){ saveOrders(); renderOrders(); }
+  }catch(e){}
+}
+function renderOrders(){
+  const list = myOrders();
+  if(list.length===0){
+    $('ordersList').innerHTML = `<div class="empty"><div class="e">🎂</div>還沒有預購紀錄</div>`;
+    return;
+  }
+  $('ordersList').innerHTML = list.map(o=>{
+    const shipped = !!o.myship;
+    return `<div class="ocard">
+      <div class="oh"><b>訂單編號：${o.no}</b><span class="ostat ${o.status&&o.status.startsWith('已')?'done':''}">${o.status}</span></div>
+      ${o.items.map(i=>`<div class="oli">· ${i.name} ×${i.qty}</div>`).join('')}
+      <div class="oli" style="margin-top:7px">總金額 $${money(o.total + SHIP_FEE)}</div>
+      ${shipped
+        ? `<div class="oli" style="color:var(--pinkd);font-weight:900;font-size:15px">付款完成 🎀</div>`
+        : `<div class="oli" style="color:var(--pinkd);font-weight:900;font-size:15px">已支付金額 $${money(o.total)}</div>`}
+      <div class="oli" style="font-size:11px;margin-top:4px">下單時間 ${o.time||''}</div>
+      ${shipped ? '' : `<a class="oship" href="${SHIP_URL}" target="_blank" rel="noopener">📦 賣貨便連結 ›</a>
+      <div class="oli" style="font-size:11px;margin-top:6px;color:var(--mu)">請記得使用賣貨便下單支付尾款哦～</div>`}
+    </div>`;
+  }).join('');
+}
+
+/* ---- Router ---- */
+const PAGES = ['shop','cart','checkout','pay','success','orders'];
+let pendingPage = null;
+function go(page){
+  if((page==='checkout'||page==='orders') && !user){ pendingPage=page; requireLogin(); if(page==='orders') return; }
+  if(page==='checkout' && cartCount()===0){ toast('購物車是空的'); page='shop'; }
+  PAGES.forEach(p=>$('p-'+p).classList.toggle('active', p===page));
+  if(page==='cart') renderCart();
+  if(page==='checkout'){ renderUserChips(); renderCheckout(); }
+  if(page==='orders'){ renderUserChips(); renderOrders(); syncOrdersFromCloud(); }
+  const s=document.querySelector('.page.active .scroll'); if(s) s.scrollTop=0;
+}
+
+renderCats(); renderGrid(); renderCart(); updateBadge(); renderUserChips();
+</script>
+</body>
+</html>
