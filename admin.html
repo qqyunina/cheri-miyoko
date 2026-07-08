@@ -139,6 +139,11 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .periodbar input[type=date]{padding:6px 10px;border:1.5px solid var(--bo);border-radius:10px;font-size:13px;color:var(--txd);background:#fff}
 .periodbar .pclr{padding:5px 12px;border:1.5px solid var(--bo);border-radius:10px;background:#fff;color:var(--mu);font-weight:700;font-size:12.5px;cursor:pointer}
 .periodbar .pclr.on{background:var(--pink);color:#fff;border-color:var(--pink)}
+.newsedit{background:#fff;border:1.5px solid var(--bo);border-radius:14px;padding:14px 15px;margin-bottom:14px}
+.newsedit .nlbl{font-weight:800;color:var(--pinkd);font-size:14px;margin-bottom:10px}
+.nrow{margin-bottom:12px}
+.nrow input{width:100%;padding:8px 12px;border:1.5px solid var(--bo);border-radius:10px;font-size:14px;font-weight:700;color:var(--txd);margin-bottom:6px;box-sizing:border-box}
+.nrow textarea{width:100%;padding:8px 12px;border:1.5px solid var(--bo);border-radius:10px;font-size:13.5px;color:var(--txd);line-height:1.6;min-height:64px;resize:vertical;box-sizing:border-box;font-family:inherit}
 .pact{display:flex;flex-direction:column;gap:8px;align-items:center;flex-shrink:0}
 .btn.sm{padding:6px 14px;font-size:12.5px;border-radius:10px}
 /* 彈窗表單 */
@@ -213,6 +218,14 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
         <span id="ev_status" class="evstat"></span>
       </div>
       <div class="evhint">新訂單編號會用這個代號開頭（例：<b>CY</b>370182）。換一檔市集就改這裡，流水號會自動從 01 重新算。</div>
+      <div class="newsedit">
+        <div class="nlbl">📢 首頁 News 三槽（顯示在客人頁上方，可自由改文案）</div>
+        <div id="news_rows"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+          <button class="btn on" onclick="saveNews()">儲存 News 文案</button>
+          <span id="news_status" class="evstat"></span>
+        </div>
+      </div>
       <div class="tools" style="margin-bottom:16px">
         <button class="btn on" onclick="openProductForm()">＋ 新增商品</button>
         <button class="btn" onclick="loadProducts()" title="重新整理">🔄 重新整理</button>
@@ -545,7 +558,33 @@ function switchMode(m){
   $('orderView').style.display = m==='order'?'block':'none';
   $('productView').style.display = m==='product'?'block':'none';
   $('subtitle').textContent = m==='order'?'· 訂單管理後台':'· 商品管理後台';
-  if(m==='product'){ loadProducts(); loadEventCode(); }
+  if(m==='product'){ loadProducts(); loadEventCode(); buildNewsRows(); loadNews(); }
+}
+const NEWS_TITLES = ['最新市集資訊','訂購須知','最新消息'];
+function buildNewsRows(){
+  if($('news_rows').dataset.built) return;
+  $('news_rows').innerHTML = NEWS_TITLES.map((t,i)=>
+    `<div class="nrow">
+       <input id="news_t${i}" placeholder="標題" value="${t}"/>
+       <textarea id="news_b${i}" placeholder="內文（可換行）"></textarea>
+     </div>`).join('');
+  $('news_rows').dataset.built='1';
+}
+async function loadNews(){
+  try{
+    const { data } = await sb.from('app_settings').select('value').eq('key','news').maybeSingle();
+    if(data && data.value){
+      const arr = JSON.parse(data.value);
+      if(Array.isArray(arr)) arr.forEach((n,i)=>{ if($('news_t'+i)) $('news_t'+i).value=n.title||''; if($('news_b'+i)) $('news_b'+i).value=n.body||''; });
+    }
+  }catch(e){}
+}
+async function saveNews(){
+  const arr = [0,1,2].map(i=>({ title:($('news_t'+i).value||'').trim(), body:($('news_b'+i).value||'').trim() }));
+  const { error } = await sb.from('app_settings').upsert({ key:'news', value:JSON.stringify(arr) }, { onConflict:'key' });
+  if(error){ $('news_status').textContent='儲存失敗：'+error.message; return; }
+  $('news_status').textContent='已儲存 ✓　客人頁上方會顯示這些';
+  setTimeout(()=>{ if($('news_status')) $('news_status').textContent=''; }, 4000);
 }
 async function loadEventCode(){
   try{
