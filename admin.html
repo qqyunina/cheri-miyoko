@@ -566,10 +566,13 @@ function closeProductForm(){ $('prodModal').style.display='none'; }
 async function uploadImage(input){
   const file = input.files && input.files[0]; if(!file) return;
   $('p_imgstatus').textContent='上傳中…';
+  // 診斷：確認上傳當下真的帶著登入身分（沒登入就直接擋，訊息講清楚）
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ $('p_imgstatus').textContent='登入已過期，請先登出再重新登入，再上傳'; return; }
   const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
   const path=`p_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
   const { error }=await sb.storage.from('product-images').upload(path, file, {upsert:true, contentType:file.type});
-  if(error){ $('p_imgstatus').textContent='上傳失敗：'+error.message; return; }
+  if(error){ $('p_imgstatus').textContent='上傳失敗：'+error.message+'（身分：'+((session.user&&session.user.role)||'unknown')+'）'; return; }
   const { data }=sb.storage.from('product-images').getPublicUrl(path);
   pImageUrl=data.publicUrl;
   $('p_imgprev').src=pImageUrl; $('p_imgprev').style.display='block';
