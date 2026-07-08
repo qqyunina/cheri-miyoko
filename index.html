@@ -135,6 +135,17 @@ a.newscard:active{transform:scale(.98)}
 .dlg-body .ddesc{font-size:13.5px;color:var(--tx);line-height:1.75;word-break:break-word}
 .dlg-foot{display:flex;align-items:center;gap:12px;border-top:1px dashed var(--bo);padding-top:14px;position:sticky;bottom:-18px;background:var(--card)}
 .dlg-foot .pbtn{flex:1}
+/* 底部 更多關於我 */
+.sitefoot{max-width:1160px;margin:26px auto 8px;padding:26px 18px 34px;text-align:center;border-top:1.5px dashed var(--bo)}
+.sf-title{font-family:var(--serif);font-size:16px;font-weight:900;color:var(--pinkd);letter-spacing:2px;margin-bottom:18px}
+.sf-avatars{display:flex;justify-content:center;gap:34px;margin-bottom:20px}
+.sf-av{display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none}
+.sf-pic{position:relative;width:78px;height:78px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 6px 16px rgba(200,140,165,.3);background:radial-gradient(circle at 50% 35%,#fff,var(--pinkl));display:flex;align-items:center;justify-content:center;font-size:34px;transition:transform .18s}
+.sf-av:active .sf-pic{transform:scale(.94)}
+.sf-pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+.sf-name{font-size:12.5px;font-weight:800;color:var(--pink)}
+.sf-mail{font-size:12.5px;color:var(--txd);margin-bottom:6px}
+.sf-copy{font-size:11.5px;color:var(--mu);letter-spacing:1px}
 
 /* Qty stepper */
 .step{display:flex;align-items:center;gap:6px;background:var(--pinkl);border-radius:12px;padding:3px}
@@ -269,6 +280,21 @@ a.newscard:active{transform:scale(.98)}
       <div class="news" id="news"></div>
       <div class="cats" id="cats"></div>
       <div class="grid" id="grid"></div>
+      <footer class="sitefoot">
+        <div class="sf-title">🎀 更多關於我 🎀</div>
+        <div class="sf-avatars">
+          <a class="sf-av" href="https://www.instagram.com/cathy871210?igsh=cXF3MTg1Z2g0bWF4" target="_blank" rel="noopener">
+            <span class="sf-pic">👧<img src="images/ig1.jpg" draggable="false" oncontextmenu="return false" onerror="this.remove()"/></span>
+            <span class="sf-name">@cathy871210</span>
+          </a>
+          <a class="sf-av" href="https://www.instagram.com/cheri_miyoko_?igsh=YzRpaTI2eG1vNThx" target="_blank" rel="noopener">
+            <span class="sf-pic">🍒<img src="images/ig2.jpg" draggable="false" oncontextmenu="return false" onerror="this.remove()"/></span>
+            <span class="sf-name">@cheri_miyoko_</span>
+          </a>
+        </div>
+        <div class="sf-mail">官方信箱：cherimiyoko1210@gmail.com</div>
+        <div class="sf-copy">© cherimiyoko 版權所有</div>
+      </footer>
     </div>
   </div>
 
