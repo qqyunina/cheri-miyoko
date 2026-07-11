@@ -793,9 +793,11 @@ function go(page){
 async function loadCatalog(){
   if(!sb) return;
   try{
-    // 只抓輕量欄位（不含 detail_images，避免首頁一次載入大量圖片）；相容尚未加 on_sale 的舊結構
-    const light = 'id,name,tab,series,series_code,price,emoji,image_url,descr,on_sale';
+    // 商品牆只抓「縮圖 thumb」等輕量欄位（大圖 image_url 與 detail_images 都改成點進商品才載，開店流量大幅降低）
+    // 逐層相容：新結構(thumb) → 尚未加 thumb → 尚未加 on_sale
+    const light = 'id,name,tab,series,series_code,price,emoji,thumb,descr,on_sale';
     let { data, error } = await sb.from('active_products').select(light).order('id',{ascending:true});
+    if(error){ ({ data, error } = await sb.from('active_products').select('id,name,tab,series,series_code,price,emoji,image_url,descr,on_sale').order('id',{ascending:true})); }
     if(error){ ({ data, error } = await sb.from('active_products').select('id,name,tab,series,series_code,price,emoji,image_url,descr').order('id',{ascending:true})); }
     if(error || !data || !data.length) return;
     PRODUCTS = data.map(r=>({
@@ -805,7 +807,7 @@ async function loadCatalog(){
       series: r.series || '',
       price: r.price || 0,
       emoji: r.emoji || '🎀',
-      img: r.image_url || '',
+      img: r.thumb || r.image_url || '',
       desc: r.descr || '',
       onsale: !!r.on_sale,
       tag: '', tagt: ''
@@ -832,10 +834,12 @@ async function openDetail(id){
   $('detailModal').style.display='flex';
   if(sb){
     try{
-      const { data } = await sb.from('active_products').select('detail,detail_images').eq('id',id).maybeSingle();
+      // 點進來才載大圖與詳情（image_url 為詳情大圖；有 detail_images 則優先用）
+      const { data } = await sb.from('active_products').select('image_url,detail,detail_images').eq('id',id).maybeSingle();
       if(dlgId!==id) return; // 期間已關閉或換商品
       if(data){
-        const imgs = Array.isArray(data.detail_images)?data.detail_images:[];
+        const di = Array.isArray(data.detail_images)?data.detail_images:[];
+        const imgs = di.length ? di : (data.image_url ? [data.image_url] : null);
         const txt = (data.detail && data.detail.trim()) ? esc(data.detail).replace(/\n/g,'<br>') : esc(p.desc||'');
         $('dlgBody').innerHTML = dlgRender(p, txt, imgs);
       }

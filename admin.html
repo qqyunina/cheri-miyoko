@@ -603,7 +603,8 @@ function setFilter(f){ filter=f; if(f==='未下單') markSeen(); render(); }
 let mode='order';
 let products=[];
 let editingId=null;
-let pImageUrl='';
+let pImageUrl='';   // 詳情大圖（點商品才載）
+let pThumb='';      // 商品牆縮圖（開店載這個，超小）
 let detailImages=[];
 function switchMode(m){
   mode=m;
@@ -811,7 +812,7 @@ function fillForm(p){
   detailImages = Array.isArray(p.detail_images) ? p.detail_images.slice() : [];
   renderDetImgs();
   $('p_detfile').value=''; $('p_detstatus').textContent = detailImages.length ? ('目前 '+detailImages.length+' 張') : '';
-  pImageUrl=p.image_url||'';
+  pImageUrl=p.image_url||''; pThumb=p.thumb||'';
   if(pImageUrl){ $('p_imgprev').src=pImageUrl; $('p_imgprev').style.display='block'; } else { $('p_imgprev').style.display='none'; $('p_imgprev').src=''; }
   $('p_imgfile').value=''; $('p_imgstatus').textContent='';
 }
@@ -819,33 +820,40 @@ function openProductForm(){ editingId=null; $('prodModalTitle').textContent='新
 function editProduct(id){ const p=products.find(x=>x.id===id); if(!p) return; editingId=id; $('prodModalTitle').textContent='編輯商品'; fillForm(p); $('prodModal').style.display='flex'; }
 function closeProductForm(){ $('prodModal').style.display='none'; }
 // 本地把圖片壓小成 data URL（走已驗證正常的 PostgREST 路徑，繞開 Storage 認證問題）
-function compressImage(file, max, q){
+function srcToJpeg(src, max, q){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if(w > h && w > max){ h = Math.round(h*max/w); w = max; }
+      else if(h >= w && h > max){ w = Math.round(w*max/h); h = max; }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => reject(new Error('圖片格式讀不到'));
+    img.src = src;
+  });
+}
+function fileToDataUrl(file){
   return new Promise((resolve,reject)=>{
     const fr = new FileReader();
-    fr.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        let w = img.naturalWidth, h = img.naturalHeight;
-        if(w > h && w > max){ h = Math.round(h*max/w); w = max; }
-        else if(h >= w && h > max){ w = Math.round(w*max/h); h = max; }
-        const c = document.createElement('canvas'); c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', q));
-      };
-      img.onerror = () => reject(new Error('圖片格式讀不到'));
-      img.src = fr.result;
-    };
+    fr.onload = () => resolve(fr.result);
     fr.onerror = () => reject(new Error('檔案讀取失敗'));
     fr.readAsDataURL(file);
   });
 }
+async function compressImage(file, max, q){ return srcToJpeg(await fileToDataUrl(file), max, q); }
 async function uploadImage(input){
   const file = input.files && input.files[0]; if(!file) return;
   $('p_imgstatus').textContent='處理中…';
-  try{ pImageUrl = await compressImage(file, 900, 0.72); }
-  catch(e){ $('p_imgstatus').textContent='圖片處理失敗：'+(e.message||e); return; }
+  try{
+    const dataUrl = await fileToDataUrl(file);
+    pImageUrl = await srcToJpeg(dataUrl, 800, 0.72);   // 詳情大圖（點進去才載）
+    pThumb    = await srcToJpeg(dataUrl, 320, 0.55);   // 商品牆縮圖（開店只載這個）
+  }catch(e){ $('p_imgstatus').textContent='圖片處理失敗：'+(e.message||e); return; }
   $('p_imgprev').src=pImageUrl; $('p_imgprev').style.display='block';
-  $('p_imgstatus').textContent='已載入 ✓（約 '+Math.round(pImageUrl.length*0.75/1024)+'KB）';
+  $('p_imgstatus').textContent='已載入 ✓（縮圖 '+Math.round(pThumb.length*0.75/1024)+'KB／大圖 '+Math.round(pImageUrl.length*0.75/1024)+'KB）';
 }
 async function addDetailImages(input){
   const files = [...(input.files||[])]; if(!files.length) return;
@@ -861,6 +869,8 @@ function removeDetImg(i){ detailImages.splice(i,1); renderDetImgs(); }
 async function saveProduct(){
   const name=$('p_name').value.trim();
   if(!name){ showToast('請填商品名稱'); return; }
+  // 舊商品沒有縮圖時，直接從既有大圖產一張（不用重新上傳）
+  if(pImageUrl && !pThumb){ try{ pThumb = await srcToJpeg(pImageUrl, 320, 0.55); }catch(e){} }
   const row={
     name,
     tab:$('p_tab').value,
@@ -870,6 +880,7 @@ async function saveProduct(){
     emoji:$('p_emoji').value.trim(),
     descr:$('p_descr').value.trim(),
     image_url:pImageUrl||null,
+    thumb:pThumb||null,
     shelf_on:fromLocalInput($('p_on').value),
     shelf_off:fromLocalInput($('p_off').value),
     on_sale:$('p_onsale').checked,
