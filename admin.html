@@ -352,7 +352,6 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 const SUPABASE_URL = 'https://smrxhnidqqgpccztyesg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_mJyhbGar7MK86XkzdjdzYg_fYoVOJ3h';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const RESET_EMAIL = 'cherimiyoko1210@gmail.com';   // 「忘記密碼」重設信一律寄到這裡
 // 進站當下先記住是否從重設信連結進來（supabase-js 之後會把 hash 清掉）
 const isRecovery = (location.hash||'').indexOf('type=recovery') >= 0;
 sb.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY') showReset(); });
@@ -382,11 +381,17 @@ function showReset(){ $('loginView').style.display='none'; $('appView').style.di
 async function showApp(){ $('loginView').style.display='none'; $('resetView').style.display='none'; $('appView').style.display='block'; await load(); }
 async function forgotPw(){
   const err = $('loginErr');
+  const email = ($('email').value||'').trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    err.style.color = '#c07';
+    err.textContent = '請先在上面「Email」欄填入你的後台登入信箱，再點忘記密碼';
+    $('email').focus(); return;
+  }
   err.style.color = '#8a6270'; err.textContent = '寄送中…';
-  const { error } = await sb.auth.resetPasswordForEmail(RESET_EMAIL, { redirectTo: location.origin + location.pathname });
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
   if(error){ err.style.color = '#c07'; err.textContent = '寄送失敗：'+error.message; return; }
   err.style.color = '#4a7a58';
-  err.textContent = '✓ 重設密碼信已寄到 '+RESET_EMAIL+'，請開信點連結設定新密碼（沒收到請看垃圾信匣）';
+  err.textContent = '✓ 重設密碼信已寄到 '+email+'，請開信點連結設定新密碼（沒收到請看垃圾信匣）';
 }
 async function doResetPw(){
   const p1 = $('np1').value, p2 = $('np2').value, err = $('resetErr');
