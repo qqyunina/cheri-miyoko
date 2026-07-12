@@ -124,7 +124,9 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .login-card input{width:100%;padding:13px;border-radius:14px;border:1.5px solid var(--bo);font-size:15px;font-family:inherit;background:#fff;color:var(--txd);margin-bottom:12px}
 .login-card input:focus{outline:none;border-color:var(--pink)}
 .login-card button{width:100%;padding:14px;border-radius:14px;border:none;background:linear-gradient(135deg,var(--pink),var(--pinkd));color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit}
-.login-card .err{color:#c07;font-size:12.5px;margin-top:12px;min-height:16px}
+.login-card .err{color:#c07;font-size:12.5px;margin-top:12px;min-height:16px;line-height:1.6}
+.login-card .forgot{display:inline-block;margin-top:14px;font-size:12.5px;color:var(--pinkd);text-decoration:underline;cursor:pointer;font-weight:700}
+.login-card .forgot:active{opacity:.6}
 /* 模式切換 */
 .modeswitch{display:flex;gap:6px;background:var(--pinkl);padding:5px;border-radius:16px;margin-bottom:18px;box-shadow:inset 0 1px 3px rgba(200,140,165,.15)}
 .ms{flex:1;padding:11px 8px;border:none;border-radius:12px;background:transparent;color:var(--pinkd);font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:.15s}
@@ -198,7 +200,21 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
       <input id="email" type="email" inputmode="email" placeholder="Email" autocomplete="username"/>
       <input id="pw" type="password" placeholder="密碼" autocomplete="current-password"/>
       <button onclick="doLogin()">登入</button>
+      <a class="forgot" onclick="forgotPw()">忘記密碼？</a>
       <div class="err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <!-- 設定新密碼（從重設信連結進來時顯示） -->
+  <div id="resetView" class="login" style="display:none">
+    <div class="login-card">
+      <div class="script">Cheri Miyoko</div>
+      <h2>設定新密碼</h2>
+      <p>請輸入新的後台密碼 🎀</p>
+      <input id="np1" type="password" placeholder="新密碼（至少 6 位）" autocomplete="new-password"/>
+      <input id="np2" type="password" placeholder="再輸入一次新密碼" autocomplete="new-password"/>
+      <button onclick="doResetPw()">更新密碼</button>
+      <div class="err" id="resetErr"></div>
     </div>
   </div>
 
@@ -336,6 +352,10 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 const SUPABASE_URL = 'https://smrxhnidqqgpccztyesg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_mJyhbGar7MK86XkzdjdzYg_fYoVOJ3h';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const RESET_EMAIL = 'cherimiyoko1210@gmail.com';   // 「忘記密碼」重設信一律寄到這裡
+// 進站當下先記住是否從重設信連結進來（supabase-js 之後會把 hash 清掉）
+const isRecovery = (location.hash||'').indexOf('type=recovery') >= 0;
+sb.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY') showReset(); });
 
 let orders = [];
 let filter = '製作中';
@@ -353,11 +373,32 @@ const stage = o => (o.status||'').startsWith('已') ? '已出貨' : (o.myship_do
 
 /* ---- Auth gate ---- */
 async function boot(){
+  if(isRecovery){ showReset(); return; }         // 從重設信進來→直接設定新密碼
   const { data:{ session } } = await sb.auth.getSession();
   if(session){ showApp(); } else { showLogin(); }
 }
-function showLogin(){ $('loginView').style.display='flex'; $('appView').style.display='none'; }
-async function showApp(){ $('loginView').style.display='none'; $('appView').style.display='block'; await load(); }
+function showLogin(){ $('loginView').style.display='flex'; $('appView').style.display='none'; $('resetView').style.display='none'; }
+function showReset(){ $('loginView').style.display='none'; $('appView').style.display='none'; $('resetView').style.display='flex'; }
+async function showApp(){ $('loginView').style.display='none'; $('resetView').style.display='none'; $('appView').style.display='block'; await load(); }
+async function forgotPw(){
+  const err = $('loginErr');
+  err.style.color = '#8a6270'; err.textContent = '寄送中…';
+  const { error } = await sb.auth.resetPasswordForEmail(RESET_EMAIL, { redirectTo: location.origin + location.pathname });
+  if(error){ err.style.color = '#c07'; err.textContent = '寄送失敗：'+error.message; return; }
+  err.style.color = '#4a7a58';
+  err.textContent = '✓ 重設密碼信已寄到 '+RESET_EMAIL+'，請開信點連結設定新密碼（沒收到請看垃圾信匣）';
+}
+async function doResetPw(){
+  const p1 = $('np1').value, p2 = $('np2').value, err = $('resetErr');
+  err.style.color = '#c07';
+  if((p1||'').length < 6){ err.textContent = '密碼至少 6 位'; return; }
+  if(p1 !== p2){ err.textContent = '兩次輸入的密碼不一致'; return; }
+  err.style.color = '#8a6270'; err.textContent = '更新中…';
+  const { error } = await sb.auth.updateUser({ password:p1 });
+  if(error){ err.style.color = '#c07'; err.textContent = '更新失敗：'+error.message; return; }
+  alert('密碼已更新 🎀 請用新密碼登入');
+  location.href = location.origin + location.pathname;
+}
 async function doLogin(){
   const email=$('email').value.trim(), password=$('pw').value;
   $('loginErr').textContent='';
