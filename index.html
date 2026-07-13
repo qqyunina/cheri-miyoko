@@ -632,8 +632,7 @@ async function submitOrder(){
   const no = await nextOrderNo();
   const ed = effDiscount();
   curOrder = { no, name, ig:user.ig, email:user.email, note, last5:'', items:cartArr(), total:payable(), discount_code:(ed>0?discount.code:''), discount_amount:ed, status:'待匯款', time:new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) };
-  orders.unshift(curOrder);
-  cart={}; saveCart(); saveOrders(); updateBadge(); resetDiscount();
+  // 先不寫入訂單、也不清購物車——要到匯款頁按「完成訂購」才正式成立，這樣在匯款頁返回，購物車東西還在
   $('payNo').textContent = no;
   $('payTotal').textContent = money(curOrder.total);
   $('payBarTotal').textContent = money(curOrder.total);
@@ -681,7 +680,8 @@ function confirmPay(){
     curOrder.last5 = last5;
   }
   curOrder.status = '待出貨';
-  saveOrders();
+  orders.unshift(curOrder);                          // 到這一步（完成訂購）才正式成立訂單
+  cart={}; saveCart(); saveOrders(); updateBadge(); resetDiscount();
   const o = curOrder;
   saveOrderToCloud(o);
   $('okNo').textContent = o.no;
@@ -731,7 +731,7 @@ function sendOrderEmail(o){
     note: o.note || '—'
   };
   emailjs.send(EMAILJS.serviceId, EMAILJS.templateId, params).then(()=>{
-    note.innerHTML = `📧 訂購確認信已寄到 <b>${o.email}</b>，可用手機開信查看 🎀`;
+    note.innerHTML = `📧 訂購確認信已寄到 <b>${o.email}</b>`;
     toast('已同步寄送確認信件至登入信箱 🎀');
   }).catch(()=>{
     note.className = 'emailnote warn';
