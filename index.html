@@ -203,6 +203,8 @@ a.newscard:active{transform:scale(.98)}
 .rcpt{text-align:left;background:var(--card);border-radius:18px;padding:18px;box-shadow:var(--sh);margin-bottom:22px;border:2px solid #fff}
 .rcpt .rrow{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;color:var(--mu)}
 .rcpt .rrow b{color:var(--txd)}
+.cfmrow{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;padding:11px 14px;margin:8px 0;background:var(--pinkbg);border:1.5px solid var(--bo);border-radius:12px;color:var(--mu)}
+.cfmrow b{color:var(--pinkd);font-weight:800;word-break:break-all;text-align:right}
 .rcpt hr{border:none;border-top:1.5px dashed var(--bo);margin:9px 0}
 .shipnote{background:linear-gradient(160deg,var(--goldl),#fff);border:1.5px solid var(--gold);border-radius:18px;padding:18px;margin-bottom:16px;box-shadow:var(--sh)}
 .shipnote p{font-size:14px;color:var(--txd);line-height:1.85;margin-bottom:14px}
@@ -430,7 +432,19 @@ a.newscard:active{transform:scale(.98)}
       <input id="lEmail" type="email" inputmode="email" placeholder="you@example.com"/>
       <div class="hint">請確認 Email 正確，供訂單確認信寄送</div>
     </div>
-    <button class="pbtn full" onclick="doLogin()">進入派對 🎀</button>
+    <button class="pbtn full" id="loginBtn" onclick="doLogin()">進入派對 🎀</button>
+  </div>
+</div>
+
+<!-- 首次登入確認配對 -->
+<div class="mask" id="confirmMask">
+  <div class="modal">
+    <h3>確認你的登入資訊 🎀</h3>
+    <div class="sub">下次登入請輸入 <b>相同的</b> Instagram 帳號與 Email，才能查看你的訂單哦！</div>
+    <div class="cfmrow"><span>Instagram</span><b id="cfmIg"></b></div>
+    <div class="cfmrow"><span>Email</span><b id="cfmEmail"></b></div>
+    <button class="pbtn full" id="cfmBtn" onclick="confirmFirstLogin()">確認，進入派對 🎀</button>
+    <button class="pbtn ghost full" style="margin-top:8px" onclick="cancelFirstLogin()">返回修改</button>
   </div>
 </div>
 
@@ -491,15 +505,56 @@ function requireLogin(){
   return false;
 }
 function closeLogin(){ $('loginMask').classList.remove('show'); pendingPage=null; }
-function doLogin(){
-  const ig=$('lIg').value.trim().replace(/^@/,''), email=$('lEmail').value.trim();
+
+let pendingNew = null;   // 首次登入待確認的 {ig,email}
+
+async function doLogin(){
+  const ig=$('lIg').value.trim().replace(/^@/,''), email=$('lEmail').value.trim().toLowerCase();
   if(!ig){ toast('請填寫 IG 帳號'); $('lIg').focus(); return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast('請填寫正確 Email'); $('lEmail').focus(); return; }
-  user = {ig, email};
+  if(!sb){ finishLogin({ig,email}); return; }   // 雲端未就緒→僅本機登入（不擋人）
+  const btn=$('loginBtn'), old=btn.textContent; btn.disabled=true; btn.textContent='檢查中…';
+  try{
+    const { data, error } = await sb.rpc('check_customer',{ p_ig:ig, p_email:email });
+    if(error) throw error;
+    const st = data || {};
+    if(st.pair){ finishLogin({ig,email}); return; }          // 配對正確→直接進
+    if(!st.ig && !st.email){ showConfirm(ig,email); return; } // 全新→跳確認
+    if(st.ig){ toast('Email 錯誤'); $('lEmail').focus(); return; }        // IG 已登記、信箱不符
+    toast('Instagram 帳號錯誤'); $('lIg').focus();                        // Email 已登記、IG 不符
+  }catch(e){ finishLogin({ig,email}); }   // SQL 未建立時：退回僅本機登入，不擋客人
+  finally{ btn.disabled=false; btn.textContent=old; }
+}
+
+function showConfirm(ig,email){
+  pendingNew={ig,email};
+  $('cfmIg').textContent='@'+ig;
+  $('cfmEmail').textContent=email;
+  $('loginMask').classList.remove('show');
+  $('confirmMask').classList.add('show');
+}
+async function confirmFirstLogin(){
+  if(!pendingNew) return;
+  const btn=$('cfmBtn'), old=btn.textContent; btn.disabled=true; btn.textContent='處理中…';
+  try{ if(sb) await sb.rpc('register_customer',{ p_ig:pendingNew.ig, p_email:pendingNew.email }); }catch(e){}
+  btn.disabled=false; btn.textContent=old;
+  $('confirmMask').classList.remove('show');
+  const u=pendingNew; pendingNew=null;
+  finishLogin(u);
+}
+function cancelFirstLogin(){
+  $('confirmMask').classList.remove('show');
+  $('loginMask').classList.add('show');
+  pendingNew=null;
+}
+
+function finishLogin(u){
+  user = { ig:u.ig, email:u.email };
   localStorage.setItem('mkt_user',JSON.stringify(user));
   $('loginMask').classList.remove('show');
   toast('登入成功 🎀');
   renderUserChips();
+  fetchMyOrdersFromCloud();                 // 跨裝置抓回自己的訂單
   if(pendingPage){ const p=pendingPage; pendingPage=null; go(p); }
 }
 function logout(){ user=null; localStorage.removeItem('mkt_user'); renderUserChips(); toast('已登出'); go('shop'); }
@@ -741,7 +796,34 @@ function sendOrderEmail(o){
   });
 }
 
-function myOrders(){ return user ? orders.filter(o=>o.email===user.email) : []; }
+function sameUser(o){
+  return user && o.ig && o.email
+    && o.ig.toLowerCase()===user.ig.toLowerCase()
+    && o.email.toLowerCase()===user.email.toLowerCase();
+}
+function myOrders(){ return user ? orders.filter(sameUser) : []; }
+function fmtTime(iso){ try{ return new Date(iso).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+
+/* 用 IG＋Email 從雲端抓回自己的所有訂單（跨裝置）。雲端為準，覆蓋本機這帳號的訂單，
+   其他帳號的本機訂單保留。SQL 未建立時安靜略過。 */
+async function fetchMyOrdersFromCloud(){
+  if(!sb || !user) return;
+  try{
+    const { data, error } = await sb.rpc('get_my_orders',{ p_ig:user.ig, p_email:user.email });
+    if(error || !Array.isArray(data)) return;
+    const mapped = data.map(r=>({
+      no:r.no, name:r.name, ig:r.ig, email:r.email, note:r.note, last5:r.last5,
+      items:r.items||[], total:r.total, status:r.status,
+      discount_code:r.discount_code||'', discount_amount:r.discount_amount||0,
+      myship: !!r.myship_done, time: r.created_at ? fmtTime(r.created_at) : ''
+    }));
+    const others = orders.filter(o=>!sameUser(o));
+    const localOnly = orders.filter(o=>sameUser(o) && !mapped.some(m=>m.no===o.no)); // 雲端還沒回來的本機單
+    orders = mapped.concat(localOnly, others);
+    saveOrders();
+    if(document.querySelector('#p-orders.active')) renderOrders();
+  }catch(e){}
+}
 
 /* 向雲端核對「我的訂單」狀態：只送訂單編號、只回傳 {no,status}，不含個資。
    後台改狀態→這裡跟著更新；後台刪除→本機這筆一起移除。SQL 未建立時安靜略過。 */
@@ -803,7 +885,7 @@ function go(page){
   if(page==='shop') renderGrid();
   if(page==='cart') renderCart();
   if(page==='checkout'){ renderUserChips(); renderCheckout(); }
-  if(page==='orders'){ renderUserChips(); renderOrders(); syncOrdersFromCloud(); }
+  if(page==='orders'){ renderUserChips(); renderOrders(); fetchMyOrdersFromCloud(); }
   const s=document.querySelector('.page.active .scroll'); if(s) s.scrollTop=0;
 }
 
@@ -914,6 +996,7 @@ async function loadNews(){
 }
 
 renderCats(); renderGrid(); renderCart(); updateBadge(); renderUserChips();
+if(user) fetchMyOrdersFromCloud();   // 已登入的訪客一進站就從雲端同步訂單
 renderNews(); loadNews();
 loadCatalog();
 </script>
