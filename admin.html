@@ -107,6 +107,8 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .tot{display:flex;justify-content:space-between;align-items:center;border-top:1.5px dashed var(--bo);padding-top:10px;margin-top:6px}
 .tot b{font-size:18px;color:var(--pinkd)}
 .note{font-size:13px;color:#FF60AF;background:#fff;border:1.5px solid var(--bo);border-radius:10px;padding:6px 11px;margin-top:8px}
+.warnbanner{background:#ffe3e3;border:1.5px solid #ff9b9b;color:#c0392b;font-weight:800;font-size:12.5px;line-height:1.65;padding:9px 12px;border-radius:12px;margin-bottom:12px}
+.warnbanner b{color:#a01e1e}
 .act{display:flex;gap:8px;margin-top:12px}
 .act button{flex:1;padding:11px;border-radius:12px;border:none;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit}
 .act .toggle{background:var(--pink);color:#fff}
@@ -164,6 +166,10 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .nrow textarea{width:100%;padding:8px 12px;border:1.5px solid var(--bo);border-radius:10px;font-size:13.5px;color:var(--txd);line-height:1.6;min-height:64px;resize:vertical;box-sizing:border-box;font-family:inherit}
 .pact{display:flex;flex-direction:column;gap:8px;align-items:center;flex-shrink:0}
 .btn.sm{padding:6px 14px;font-size:12.5px;border-radius:10px}
+.movegrp{display:flex;gap:5px;margin-bottom:2px}
+.movebtn{width:32px;height:26px;border:1.5px solid var(--bo);background:#fff;color:var(--pinkd);border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;padding:0;line-height:1}
+.movebtn:disabled{opacity:.28;cursor:default}
+.movebtn:not(:disabled):active{transform:scale(.9)}
 /* 彈窗表單 */
 .modal{position:fixed;inset:0;z-index:9990;background:rgba(110,70,85,.4);display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;overflow-y:auto}
 .modal-card{width:100%;max-width:440px;background:var(--card);border-radius:22px;padding:20px;box-shadow:0 18px 50px rgba(150,90,115,.35);border:2px solid #fff;margin:auto}
@@ -370,6 +376,8 @@ const SHIP_FEE = 100;
 let catalogProducts = [];
 const $ = id => document.getElementById(id);
 const money = n => (n||0).toLocaleString();
+// 跳脫客人可控欄位（姓名/IG/Email/備註/品項名…），防止儲存型 XSS 在後台執行
+const esc = s => String(s==null?'':s).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtTime = t => t ? new Date(t).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
 const stage = o => (o.status||'').startsWith('已') ? '已出貨' : (o.myship_done ? '製作中' : '未下單');
 
@@ -560,8 +568,8 @@ function render(){
     const custLegend = custRows.map((r,i)=>{
       const pct = custTotal? (r.rev/custTotal*100) : 0;
       const c = palette[i%palette.length];
-      const nm = r.names.length ? `<span class="vip-nm">${r.names.join('／')}</span>` : '';
-      const ig = r.ig ? `<a href="https://instagram.com/${r.ig}" target="_blank">@${r.ig}</a>` : `<span class="noig">(無 IG)</span>`;
+      const nm = r.names.length ? `<span class="vip-nm">${r.names.map(esc).join('／')}</span>` : '';
+      const ig = r.ig ? `<a href="https://instagram.com/${encodeURIComponent(r.ig)}" target="_blank">@${esc(r.ig)}</a>` : `<span class="noig">(無 IG)</span>`;
       const crown = i===0 ? '👑 ' : '';
       return `<div class="vip-row"><span class="vip-dot" style="background:${c}"></span><span class="vip-ig">${crown}${nm}${ig}</span><span class="vip-pct">${pct.toFixed(1)}%</span><span class="vip-rev">$${money(r.rev)}</span></div>`;
     }).join('');
@@ -615,11 +623,11 @@ function render(){
       its.forEach((it,idx)=>{ const q=it.qty||1; const k=(it.emoji||'')+' '+it.name; for(let u=0;u<q;u++){ if(!set.has(idx+'#'+u)) flat.push({k, who:(o.name||'').trim()}); } });
     });
     if(flat.length===0){ el0.innerHTML = `<div class="empty"><div class="e">🎉</div>太棒了！所有品項都做好囉～</div>`; return; }
-    const rows = flat.map(({k,who})=>{
-      const kk = k.replace(/'/g,"\\'");
+    pendingFlat = flat;   // 供「完成」按鈕用索引安全取回品項名，避免把名稱塞進 onclick 造成注入
+    const rows = flat.map(({k,who},fi)=>{
       const need = pending[k]>1 ? `<span class="todo-need">還缺 ${pending[k]}</span>` : '';
-      const by = who ? `<span class="todo-by">${who}</span>` : '';
-      return `<div class="irow todo-row"><span>${k}${need}${by}</span><button class="donebtn" onclick="completePending('${kk}')">完成</button></div>`;
+      const by = who ? `<span class="todo-by">${esc(who)}</span>` : '';
+      return `<div class="irow todo-row"><span>${esc(k)}${need}${by}</span><button class="donebtn" onclick="completePendingAt(${fi})">完成</button></div>`;
     }).join('');
     el0.innerHTML = `<div class="card"><div class="todo-h">🧵 待製清單　<span>共 ${flat.length} 件</span></div><div class="todo-hint">⏳ 等越久的商品排越上面哦，「還缺 N」是這個品項還沒做的總數</div>${rows}</div>`;
     return;
@@ -639,15 +647,21 @@ function render(){
     const items = Array.isArray(o.items) ? o.items : [];
     const doneSet = unitTokens(o);
     const allDone = orderAllDone(o);
+    // #3 金額防呆：用訂單自己的品項重算應付金額，和記錄的 total 對不上就示警（只給攤主看）
+    const itemsSum = items.reduce((s,i)=>s+(Number(i.price)||0)*(Number(i.qty)||1),0);
+    const disc = o.discount_amount||0;
+    const expectTotal = Math.max(0, itemsSum - SHIP_FEE - disc);
+    const amountBad = (Number(o.total)||0) !== expectTotal;
     return `<div class="card">
+      ${amountBad?`<div class="warnbanner">⚠️ 金額異常，請人工核對：品項合計 $${money(itemsSum)}${disc>0?`　－折扣 $${money(disc)}`:''}　－賣貨便 $${money(SHIP_FEE)}　應為 <b>$${money(expectTotal)}</b>，但訂單記錄 <b>$${money(o.total)}</b></div>`:''}
       ${(allDone && !done)?`<div class="donebanner ${o.packed?'':'unpacked'}"><span>✨ ${o.packed?'已包裝完成，等待出貨！':'此筆訂單已完成，等待包裝中哦！'}</span><button class="packbtn" onclick="togglePacked('${o.id}')">${o.packed?'我真棒':'完成'}</button></div>`:''}
       <div class="ch">
         <div style="flex:1;min-width:0">
-          <span class="ono">${o.no||''}</span>
-          <button class="custtog" onclick="toggleMeta('${o.id}')">🎀 ${o.name||''} <span class="arw">${metaOpen.has(o.id)?'▾':'▸'}</span></button>
+          <span class="ono">${esc(o.no||'')}</span>
+          <button class="custtog" onclick="toggleMeta('${o.id}')">🎀 ${esc(o.name||'')} <span class="arw">${metaOpen.has(o.id)?'▾':'▸'}</span></button>
           <div class="meta"${metaOpen.has(o.id)?'':' style="display:none"'}>
-            📷 <a href="https://instagram.com/${o.ig||''}" target="_blank">@${o.ig||''}</a><br>
-            ✉️ ${o.email||'—'}<br>
+            📷 <a href="https://instagram.com/${encodeURIComponent(o.ig||'')}" target="_blank">@${esc(o.ig||'')}</a><br>
+            ✉️ ${o.email?esc(o.email):'—'}<br>
             ${o.last5==='現場付款'?'💵 現場付款':'💳 後5碼 '+(o.last5||'—')}<br>
             🕒 下單 ${fmtTime(o.created_at)}
           </div>
@@ -659,19 +673,19 @@ function render(){
           const q = i.qty||1;
           let dc = 0; for(let u=0;u<q;u++) if(doneSet.has(idx+'#'+u)) dc++;
           const boxes = done ? '' : `<span class="chkgroup">${Array.from({length:q},(_,u)=>`<input type="checkbox" class="itemchk" title="第 ${u+1} 件做好" ${doneSet.has(idx+'#'+u)?'checked':''} onchange="toggleUnit('${o.id}',${idx},${u})"/>`).join('')}${q>1?`<span class="chkcnt">${dc}/${q}</span>`:''}</span>`;
-          return `<div class="irow item"><span>${i.emoji||''} ${i.name} ×${i.qty}${boxes}</span><span>$${money(i.price*i.qty)}</span></div>`;
+          return `<div class="irow item"><span>${esc(i.emoji||'')} ${esc(i.name||'')} ×${i.qty}${boxes}</span><span>$${money(i.price*i.qty)}</span></div>`;
         }).join('')}
         ${(() => { const disc=o.discount_amount||0; const goods=o.total+SHIP_FEE+disc;
-          const discRow = disc>0 ? `<div class="irow"><span>🎟 折扣碼 ${o.discount_code||''}</span><span style="color:var(--pinkd)">−$${money(disc)}</span></div>` : '';
+          const discRow = disc>0 ? `<div class="irow"><span>🎟 折扣碼 ${esc(o.discount_code||'')}</span><span style="color:var(--pinkd)">−$${money(disc)}</span></div>` : '';
           return myship
           ? `${disc>0?`<div class="irow" style="border-top:1px dashed var(--bo);padding-top:8px;margin-top:4px"><span>商品合計</span><span>$${money(goods)}</span></div>${discRow}`:''}<div class="tot" ${disc>0?'':'style="border-top:1px dashed var(--bo);padding-top:10px;margin-top:6px"'}><span>總額</span><b>$${money(o.total+SHIP_FEE)}</b></div>`
           : `<div class="irow" style="border-top:1px dashed var(--bo);padding-top:8px;margin-top:4px"><span>商品合計</span><span>$${money(goods)}</span></div>
         ${discRow}<div class="irow"><span>賣貨便尾款</span><span>−$${money(SHIP_FEE)}</span></div>
         <div class="tot"><span>總額</span><b>$${money(o.total)}</b></div>`; })()}
       </div>
-      ${o.note?`<div class="note">📝 客人備註：${o.note}</div>`:''}
+      ${o.note?`<div class="note">📝 客人備註：${esc(o.note)}</div>`:''}
       <div class="adminnote">
-        <textarea id="an-${o.id}" rows="1" placeholder="備註" oninput="autoGrow(this);autoSaveNote('${o.id}')">${o.admin_note||''}</textarea>
+        <textarea id="an-${o.id}" rows="1" placeholder="備註" oninput="autoGrow(this);autoSaveNote('${o.id}')">${esc(o.admin_note||'')}</textarea>
         <span class="savehint" id="sh-${o.id}"></span>
       </div>
       <div class="act">
@@ -869,7 +883,7 @@ function prodState(p){
 function renderProducts(){
   const el=$('prodList');
   if(products.length===0){ el.innerHTML=`<div class="empty"><div class="e">🛍</div>還沒有商品，點「＋ 新增商品」開始吧～</div>`; return; }
-  el.innerHTML = products.map(p=>{
+  el.innerHTML = products.map((p,pi)=>{
     const st=prodState(p);
     const img = p.image_url ? `<img src="${p.image_url}" class="pthumb" alt=""/>` : `<div class="pthumb emoji">${p.emoji||'🎀'}</div>`;
     const ser = p.series ? ' ・ '+p.series+(p.series_code?'（'+p.series_code+'）':'') : '';
@@ -883,6 +897,10 @@ function renderProducts(){
         <div class="pmeta">$${(p.price||0).toLocaleString()}　🕒 ${fmtShelf(p.shelf_on)} ~ ${fmtShelf(p.shelf_off)}</div>
       </div>
       <div class="pact">
+        <div class="movegrp">
+          <button class="movebtn" onclick="moveProduct(${p.id},-1)" ${pi===0?'disabled':''} title="上移">▲</button>
+          <button class="movebtn" onclick="moveProduct(${p.id},1)" ${pi===products.length-1?'disabled':''} title="下移">▼</button>
+        </div>
         <button class="btn sm ${active?'':'on'}" onclick="toggleActive(${p.id})">${active?'下架':'上架'}</button>
         <button class="btn sm" onclick="editProduct(${p.id})">編輯</button>
         <button class="cardel" onclick="delProduct(${p.id})" title="刪除商品">🗑</button>
@@ -959,6 +977,8 @@ function removeDetImg(i){ detailImages.splice(i,1); renderDetImgs(); }
 async function saveProduct(){
   const name=$('p_name').value.trim();
   if(!name){ showToast('請填商品名稱'); return; }
+  const price = parseInt($('p_price').value,10);
+  if(!(price>0)){ showToast('請填寫商品金額'); $('p_price').focus(); return; }   // 防呆：金額未填/非正數不可送出
   // 舊商品沒有縮圖時，直接從既有大圖產一張（不用重新上傳）
   if(pImageUrl && !pThumb){ try{ pThumb = await srcToJpeg(pImageUrl, 320, 0.55); }catch(e){} }
   const row={
@@ -966,7 +986,7 @@ async function saveProduct(){
     tab:$('p_tab').value,
     series:$('p_series').value.trim(),
     series_code:$('p_scode').value.trim().toUpperCase(),
-    price:parseInt($('p_price').value,10)||0,
+    price,
     emoji:$('p_emoji').value.trim(),
     descr:$('p_descr').value.trim(),
     image_url:pImageUrl||null,
@@ -983,6 +1003,20 @@ async function saveProduct(){
 
   if(error){ showToast('儲存失敗：'+error.message); return; }
   closeProductForm(); showToast(editingId?'已更新商品 🎀':'已新增商品 🎀'); loadProducts();
+}
+// 商品排序：上/下移。交換後把整份重編 sort=索引，只寫回有變動的列（相鄰交換通常只 2 筆）
+async function moveProduct(id, dir){
+  const idx = products.findIndex(p=>p.id===id);
+  const j = idx + dir;
+  if(idx<0 || j<0 || j>=products.length) return;
+  [products[idx], products[j]] = [products[j], products[idx]];   // 陣列內交換
+  renderProducts();                                              // 先更新畫面
+  const updates = [];
+  products.forEach((p,i)=>{ if(p.sort!==i){ p.sort=i; updates.push(p); } });
+  for(const p of updates){
+    const { error } = await sb.from('products').update({sort:p.sort}).eq('id',p.id);
+    if(error){ showToast('排序儲存失敗：'+error.message); loadProducts(); return; }
+  }
 }
 async function toggleActive(id){
   const p=products.find(x=>x.id===id); if(!p) return;
@@ -1090,6 +1124,8 @@ async function toggleUnit(id, idx, unit, cheerMsg){
     showCheer(msg);
   }
 }
+let pendingFlat = [];
+function completePendingAt(i){ const row = pendingFlat[i]; if(row) completePending(row.k); }
 function completePending(key){
   const cand = orders
     .filter(o=>Array.isArray(o.items) && o.items.length)
@@ -1149,7 +1185,9 @@ function exportCsv(){
     const items = (Array.isArray(o.items)?o.items:[]).map(i=>`${i.name}x${i.qty}`).join(' / ');
     rows.push([o.no,o.status,o.myship_done?'已下單':'未下單',o.name,'@'+o.ig,o.email||'',o.last5||'',items,o.discount_code||'',o.discount_amount||0,o.total,o.note||'',o.admin_note||'',fmtTime(o.created_at)]);
   });
-  const csv = '\ufeff'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  // \u9632\u516c\u5f0f\u6ce8\u5165\uff1a\u4ee5 = + - @ \u958b\u982d\u7684\u6b04\u4f4d\uff08\u5ba2\u4eba\u59d3\u540d/\u5099\u8a3b\u53ef\u80fd\uff09\uff0c\u524d\u9762\u88dc ' \u8b93 Excel \u7576\u7d14\u6587\u5b57
+  const csvCell = c => { let s = String(c==null?'':c); if(/^[=+\-@\t\r]/.test(s)) s = "'"+s; return `"${s.replace(/"/g,'""')}"`; };
+  const csv = '\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download = `少女午茶派對_訂單_${new Date().toISOString().slice(0,10)}.csv`;

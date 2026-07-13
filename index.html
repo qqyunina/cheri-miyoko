@@ -106,7 +106,7 @@ a.newscard:active{transform:scale(.98)}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;width:100%;max-width:1160px;margin:0 auto}
 @media(min-width:600px){.grid{grid-template-columns:repeat(3,1fr);gap:16px}}
 @media(min-width:960px){.grid{grid-template-columns:repeat(4,1fr);gap:18px}}
-.prod{position:relative;background:var(--card);border-radius:22px;overflow:hidden;box-shadow:var(--sh);display:flex;flex-direction:column;border:2px solid #fff;transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s;animation:cardin .5s both}
+.prod{position:relative;background:var(--card);border-radius:22px;overflow:hidden;box-shadow:var(--sh);display:flex;flex-direction:column;border:2px solid #fff;transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s;animation:cardin .5s both;cursor:pointer}
 @keyframes cardin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 .prod:hover{transform:translateY(-5px);box-shadow:0 16px 32px rgba(200,140,165,.28)}
 .prod:active{transform:translateY(-1px) scale(.99)}
@@ -352,7 +352,7 @@ a.newscard:active{transform:scale(.98)}
     </div>
     <div class="bar">
       <div class="tot"><small>總額</small><b>$<span id="coTotal">0</span></b></div>
-      <button class="pbtn" onclick="submitOrder()">確認送出 🎀</button>
+      <button class="pbtn" id="submitBtn" onclick="submitOrder()">確認送出 🎀</button>
     </div>
   </div>
 
@@ -379,7 +379,7 @@ a.newscard:active{transform:scale(.98)}
     </div>
     <div class="bar">
       <div class="tot"><small>總額</small><b>$<span id="payBarTotal">0</span></b></div>
-      <button class="pbtn" onclick="confirmPay()">完成訂購 🎁</button>
+      <button class="pbtn" id="payConfirmBtn" onclick="confirmPay()">完成訂購 🎁</button>
     </div>
   </div>
 
@@ -489,7 +489,7 @@ let curCat = '全部';
 const $ = id => document.getElementById(id);
 const saveCart = () => localStorage.setItem('mkt_cart',JSON.stringify(cart));
 const saveOrders = () => localStorage.setItem('mkt_orders',JSON.stringify(orders));
-const money = n => n.toLocaleString();
+const money = n => (Number(n)||0).toLocaleString();   // 防呆：空值/NaN 一律當 0，避免顯示「NaN」
 const SHIP_FEE = 100;                       // 賣貨便尾款（到店取貨時付）
 let discount = {code:'', amount:0};         // 折扣碼（結帳套用）
 const effDiscount = () => Math.min(discount.amount||0, Math.max(0, cartTotal()-SHIP_FEE));
@@ -581,15 +581,15 @@ function renderGrid(){
       : (q>0
         ? `<div class="step"><button onclick="chg(${p.id},-1)">−</button><span>${q}</span><button onclick="chg(${p.id},1)">＋</button></div>`
         : `<button class="addbtn" onclick="chg(${p.id},1)">＋</button>`);
-    return `<div class="prod">
+    return `<div class="prod" onclick="openDetail(${p.id})">
       ${p.onsale?`<span class="tag sale">優惠</span>`:(p.tag?`<span class="tag ${p.tagt||''}">${p.tag}</span>`:'')}
-      <div class="img" onclick="openDetail(${p.id})"><img src="${p.img}" alt="${p.name}" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.remove()"/><span>${p.emoji}</span></div>
+      <div class="img"><img src="${p.img}" alt="${p.name}" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.remove()"/><span>${p.emoji}</span></div>
       <div class="body">
         <div class="name">${p.name}</div>
         <div class="desc">${p.desc}</div>
         <div class="row">
           <div class="price">$${p.price}</div>
-          ${ctrl}
+          <span class="ctrlwrap" style="display:inline-flex" onclick="event.stopPropagation()">${ctrl}</span>
         </div>
       </div>
     </div>`;
@@ -598,6 +598,7 @@ function renderGrid(){
 
 function chg(id,d){
   const p = PRODUCTS.find(x=>x.id===id);
+  if(!p){ delete cart[id]; resetDiscount(); saveCart(); renderGrid(); renderCart(); updateBadge(); toast('該商品已下架，已從購物車移除'); return; } // 商品已不存在→自動移除，避免當掉
   const cur = cart[id]?.qty||0;
   const next = cur+d;
   if(next<=0){ delete cart[id]; } else { cart[id]={qty:next, name:p.name, price:p.price, emoji:p.emoji, img:p.img}; }
@@ -681,21 +682,31 @@ async function nextOrderNo(){
   }catch(e){}
   return 'CM' + Date.now().toString().slice(-8); // 雲端計數器未就緒時的備援：仍給唯一編號
 }
+let submitting = false;
 async function submitOrder(){
+  if(submitting) return;                                  // 防連點：避免重複產生訂單號（跳號）
   if(!requireLogin()){ pendingPage='checkout'; return; }
   const name=$('fName').value.trim(), userNote=$('fNote').value.trim();
   if(!name){ toast('請填寫取貨人姓名'); $('fName').focus(); return; }
   const note = userNote;
-  const no = await nextOrderNo();
-  const ed = effDiscount();
-  curOrder = { no, name, ig:user.ig, email:user.email, note, last5:'', items:cartArr(), total:payable(), discount_code:(ed>0?discount.code:''), discount_amount:ed, status:'待匯款', time:new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) };
-  // 先不寫入訂單、也不清購物車——要到匯款頁按「完成訂購」才正式成立，這樣在匯款頁返回，購物車東西還在
-  $('payNo').textContent = no;
-  $('payTotal').textContent = money(curOrder.total);
-  $('payBarTotal').textContent = money(curOrder.total);
-  $('fLast5').value = '';
-  $('payOnSite').checked = false; toggleOnSite();
-  go('pay');
+  submitting = true;
+  const btn=$('submitBtn'), oldTxt=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='處理中…'; }
+  try{
+    const no = await nextOrderNo();
+    const ed = effDiscount();
+    curOrder = { no, name, ig:user.ig, email:user.email, note, last5:'', items:cartArr(), total:payable(), discount_code:(ed>0?discount.code:''), discount_amount:ed, status:'待匯款', time:new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) };
+    // 先不寫入訂單、也不清購物車——要到匯款頁按「完成訂購」才正式成立，這樣在匯款頁返回，購物車東西還在
+    $('payNo').textContent = no;
+    $('payTotal').textContent = money(curOrder.total);
+    $('payBarTotal').textContent = money(curOrder.total);
+    $('fLast5').value = '';
+    $('payOnSite').checked = false; toggleOnSite();
+    go('pay');
+  }finally{
+    submitting = false;
+    if(btn){ btn.disabled=false; btn.textContent=oldTxt; }
+  }
 }
 
 function copyAcct(){
@@ -708,15 +719,16 @@ const SUPABASE_URL = 'https://smrxhnidqqgpccztyesg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_mJyhbGar7MK86XkzdjdzYg_fYoVOJ3h';
 const sb = (window.supabase && SUPABASE_URL) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 async function saveOrderToCloud(o){
-  if(!sb) return;
+  if(!sb) return true;   // 沒雲端連線（CDN 被擋等極端狀況）→ 不阻擋，仍保留本機單
   try{
     const { error } = await sb.from('orders').insert({
       no:o.no, name:o.name, ig:o.ig, email:o.email,
       note:o.note, last5:o.last5, items:o.items, total:o.total, status:o.status,
       discount_code:o.discount_code||null, discount_amount:o.discount_amount||0
     });
-    if(error) console.warn('雲端存單失敗', error);
-  }catch(e){ console.warn('雲端存單錯誤', e); }
+    if(error){ console.warn('雲端存單失敗', error); return false; }
+    return true;
+  }catch(e){ console.warn('雲端存單錯誤', e); return false; }
 }
 
 /* ---- EmailJS 設定（需攤主填入自己的金鑰才會真的寄信）---- */
@@ -728,7 +740,9 @@ try{ if(window.emailjs && EMAILJS.publicKey){ emailjs.init({publicKey:EMAILJS.pu
 function toggleOnSite(){
   $('last5Field').style.display = $('payOnSite').checked ? 'none' : 'block';
 }
-function confirmPay(){
+let paying = false;
+async function confirmPay(){
+  if(paying) return;                                 // 防連點：避免重複成立訂單
   if($('payOnSite').checked){
     curOrder.last5 = '現場付款';
   }else{
@@ -737,10 +751,19 @@ function confirmPay(){
     curOrder.last5 = last5;
   }
   curOrder.status = '待出貨';
-  orders.unshift(curOrder);                          // 到這一步（完成訂購）才正式成立訂單
-  cart={}; saveCart(); saveOrders(); updateBadge(); resetDiscount();
   const o = curOrder;
-  saveOrderToCloud(o);
+  paying = true;
+  const _btn = $('payConfirmBtn'), _txt = _btn ? _btn.textContent : '';
+  if(_btn){ _btn.disabled = true; _btn.textContent = '送出中…'; }
+  const ok = await saveOrderToCloud(o);              // 先確認雲端收到，才算正式成立（避免掉單）
+  if(!ok){
+    paying = false;
+    if(_btn){ _btn.disabled = false; _btn.textContent = _txt; }
+    toast('訂單送出失敗，請檢查網路後再按一次 🥺');
+    return;
+  }
+  orders.unshift(o);                                 // 雲端成功→正式成立訂單、清購物車
+  cart={}; saveCart(); saveOrders(); updateBadge(); resetDiscount();
   $('okNo').textContent = o.no;
   $('okRcpt').innerHTML =
     `<div class="rrow"><span>取貨人</span><b>${o.name}</b></div>
@@ -757,6 +780,8 @@ function confirmPay(){
      <div class="rrow" style="font-size:15px"><b>已支付金額</b><b style="color:var(--pinkd)">$${money(o.total)}</b></div>`;
   go('success');
   sendOrderEmail(o);
+  paying = false;
+  if(_btn){ _btn.disabled = false; _btn.textContent = _txt; }
 }
 
 function sendOrderEmail(o){
@@ -817,9 +842,9 @@ async function fetchMyOrdersFromCloud(){
       discount_code:r.discount_code||'', discount_amount:r.discount_amount||0,
       myship: !!r.myship_done, time: r.created_at ? fmtTime(r.created_at) : ''
     }));
+    // 雲端＝這個帳號訂單的唯一真相：後台刪掉的單，這裡會跟著消失（完成訂購已確保成立時必定進雲端）
     const others = orders.filter(o=>!sameUser(o));
-    const localOnly = orders.filter(o=>sameUser(o) && !mapped.some(m=>m.no===o.no)); // 雲端還沒回來的本機單
-    orders = mapped.concat(localOnly, others);
+    orders = mapped.concat(others);
     saveOrders();
     if(document.querySelector('#p-orders.active')) renderOrders();
   }catch(e){}
@@ -896,9 +921,9 @@ async function loadCatalog(){
     // 商品牆只抓「縮圖 thumb」等輕量欄位（大圖 image_url 與 detail_images 都改成點進商品才載，開店流量大幅降低）
     // 逐層相容：新結構(thumb) → 尚未加 thumb → 尚未加 on_sale
     const light = 'id,name,tab,series,series_code,price,emoji,thumb,descr,on_sale';
-    let { data, error } = await sb.from('active_products').select(light).order('id',{ascending:true});
-    if(error){ ({ data, error } = await sb.from('active_products').select('id,name,tab,series,series_code,price,emoji,image_url,descr,on_sale').order('id',{ascending:true})); }
-    if(error){ ({ data, error } = await sb.from('active_products').select('id,name,tab,series,series_code,price,emoji,image_url,descr').order('id',{ascending:true})); }
+    let { data, error } = await sb.from('active_products').select(light).order('sort',{ascending:true,nullsFirst:false}).order('id',{ascending:true});
+    if(error){ ({ data, error } = await sb.from('active_products').select('id,name,tab,series,series_code,price,emoji,image_url,descr,on_sale').order('sort',{ascending:true,nullsFirst:false}).order('id',{ascending:true})); }
+    if(error){ ({ data, error } = await sb.from('active_products').select('id,name,tab,series,series_code,price,emoji,image_url,descr').order('sort',{ascending:true,nullsFirst:false}).order('id',{ascending:true})); }
     if(error || !data || !data.length) return;
     PRODUCTS = data.map(r=>({
       id: r.id,
