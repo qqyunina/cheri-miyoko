@@ -67,6 +67,9 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .items{background:#fdf6f9;border-radius:14px;padding:12px 14px;margin:10px 0}
 .irow{display:flex;justify-content:space-between;font-size:13.5px;padding:3px 0;color:var(--txd)}
 .irow.item .itemchk{width:18px;height:18px;accent-color:var(--pink);cursor:pointer;flex-shrink:0;vertical-align:middle;margin-left:6px}
+.chkgroup{display:inline-flex;align-items:center;gap:5px;margin-left:6px;vertical-align:middle}
+.chkgroup .itemchk{margin-left:0}
+.chkcnt{font-size:11px;font-weight:800;color:var(--pinkd);background:var(--pinkl);border-radius:999px;padding:1px 7px;margin-left:2px}
 .cheer-toast{position:fixed;left:50%;top:50%;transform:translate(-50%,calc(-50% - 16px)) scale(.85);z-index:9999;max-width:80vw;text-align:center;background:#1a1a1a;color:#FFAAD5;font-weight:800;font-size:10px;line-height:1.5;padding:14px 22px;border:2px dashed var(--pink);border-radius:18px;box-shadow:0 14px 34px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .3s ease, transform .4s cubic-bezier(.34,1.56,.64,1)}
 .cheer-toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .confetti-pc{position:fixed;z-index:9998;pointer-events:none;will-change:transform,opacity}
@@ -370,6 +373,36 @@ const money = n => (n||0).toLocaleString();
 const fmtTime = t => t ? new Date(t).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
 const stage = o => (o.status||'').startsWith('已') ? '已出貨' : (o.myship_done ? '製作中' : '未下單');
 
+/* ---- 逐件完成追蹤 ----
+   items_done 內每個元素是一個「單件」token："品項index#第幾件"（例 "3#0"、"3#1"）。
+   相容舊資料：純數字 index 代表「整行都做好」→ 自動展開成該行全部單件。 */
+function unitTokens(o){
+  const items = Array.isArray(o.items) ? o.items : [];
+  const raw = Array.isArray(o.items_done) ? o.items_done : [];
+  const set = new Set();
+  raw.forEach(v=>{
+    if(typeof v === 'number' || /^\d+$/.test(String(v))){       // 舊：整行 index
+      const idx = Number(v); const q = (items[idx] && items[idx].qty) || 1;
+      for(let u=0; u<q; u++) set.add(idx+'#'+u);
+    } else {
+      set.add(String(v));                                        // 新：單件 token
+    }
+  });
+  return set;
+}
+function orderAllDone(o){
+  const items = Array.isArray(o.items) ? o.items : [];
+  if(!items.length) return false;
+  const set = unitTokens(o);
+  return items.every((it,idx)=>{ const q=it.qty||1; for(let u=0;u<q;u++) if(!set.has(idx+'#'+u)) return false; return true; });
+}
+function undoneUnits(o){                                          // 這張單還沒做的單件總數
+  const items = Array.isArray(o.items) ? o.items : [];
+  const set = unitTokens(o); let n=0;
+  items.forEach((it,idx)=>{ const q=it.qty||1; for(let u=0;u<q;u++) if(!set.has(idx+'#'+u)) n++; });
+  return n;
+}
+
 /* ---- Auth gate ---- */
 async function boot(){
   if(isRecovery){ showReset(); return; }         // 從重設信進來→直接設定新密碼
@@ -457,11 +490,7 @@ function render(){
   const making = orders.filter(o=>stage(o)==='製作中').length;
   const done = orders.filter(o=>stage(o)==='已出貨').length;
   let pendingTotal = 0;
-  orders.forEach(o=>{
-    const its = Array.isArray(o.items) ? o.items : [];
-    const da = Array.isArray(o.items_done) ? o.items_done : [];
-    its.forEach((it,idx)=>{ if(!da.includes(idx)) pendingTotal += (it.qty||1); });
-  });
+  orders.forEach(o=>{ pendingTotal += undoneUnits(o); });
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
   const todayCnt = orders.filter(o=>o.created_at && new Date(o.created_at) >= todayStart).length;
   $('stats').innerHTML = `
@@ -575,15 +604,15 @@ function render(){
     const pending = {};
     orders.forEach(o=>{
       const its = Array.isArray(o.items) ? o.items : [];
-      const da = Array.isArray(o.items_done) ? o.items_done : [];
-      its.forEach((it,idx)=>{ if(!da.includes(idx)){ const k=(it.emoji||'')+' '+it.name; pending[k]=(pending[k]||0)+(it.qty||1); } });
+      const set = unitTokens(o);
+      its.forEach((it,idx)=>{ const q=it.qty||1; let undone=0; for(let u=0;u<q;u++) if(!set.has(idx+'#'+u)) undone++; if(undone){ const k=(it.emoji||'')+' '+it.name; pending[k]=(pending[k]||0)+undone; } });
     });
     const el0 = $('list');
     const flat = [];
     orders.slice().sort((a,b)=> new Date(a.created_at||0) - new Date(b.created_at||0)).forEach(o=>{
       const its = Array.isArray(o.items) ? o.items : [];
-      const da = Array.isArray(o.items_done) ? o.items_done : [];
-      its.forEach((it,idx)=>{ if(!da.includes(idx)){ const k=(it.emoji||'')+' '+it.name; const q=it.qty||1; for(let n=0;n<q;n++) flat.push({k, who:(o.name||'').trim()}); } });
+      const set = unitTokens(o);
+      its.forEach((it,idx)=>{ const q=it.qty||1; const k=(it.emoji||'')+' '+it.name; for(let u=0;u<q;u++){ if(!set.has(idx+'#'+u)) flat.push({k, who:(o.name||'').trim()}); } });
     });
     if(flat.length===0){ el0.innerHTML = `<div class="empty"><div class="e">🎉</div>太棒了！所有品項都做好囉～</div>`; return; }
     const rows = flat.map(({k,who})=>{
@@ -608,8 +637,8 @@ function render(){
     const done = (o.status||'').startsWith('已');
     const myship = !!o.myship_done;
     const items = Array.isArray(o.items) ? o.items : [];
-    const doneArr = Array.isArray(o.items_done) ? o.items_done : [];
-    const allDone = items.length>0 && items.every((_,idx)=>doneArr.includes(idx));
+    const doneSet = unitTokens(o);
+    const allDone = orderAllDone(o);
     return `<div class="card">
       ${(allDone && !done)?`<div class="donebanner ${o.packed?'':'unpacked'}"><span>✨ ${o.packed?'已包裝完成，等待出貨！':'此筆訂單已完成，等待包裝中哦！'}</span><button class="packbtn" onclick="togglePacked('${o.id}')">${o.packed?'我真棒':'完成'}</button></div>`:''}
       <div class="ch">
@@ -626,7 +655,12 @@ function render(){
         <button class="cardel" onclick="del('${o.id}')" title="刪除訂單">🗑</button>
       </div>
       <div class="items">
-        ${items.map((i,idx)=>`<div class="irow item"><span>${i.emoji||''} ${i.name} ×${i.qty}${done?'':`<input type="checkbox" class="itemchk" title="標記已做好" ${doneArr.includes(idx)?'checked':''} onchange="toggleItemDone('${o.id}',${idx})"/>`}</span><span>$${money(i.price*i.qty)}</span></div>`).join('')}
+        ${items.map((i,idx)=>{
+          const q = i.qty||1;
+          let dc = 0; for(let u=0;u<q;u++) if(doneSet.has(idx+'#'+u)) dc++;
+          const boxes = done ? '' : `<span class="chkgroup">${Array.from({length:q},(_,u)=>`<input type="checkbox" class="itemchk" title="第 ${u+1} 件做好" ${doneSet.has(idx+'#'+u)?'checked':''} onchange="toggleUnit('${o.id}',${idx},${u})"/>`).join('')}${q>1?`<span class="chkcnt">${dc}/${q}</span>`:''}</span>`;
+          return `<div class="irow item"><span>${i.emoji||''} ${i.name} ×${i.qty}${boxes}</span><span>$${money(i.price*i.qty)}</span></div>`;
+        }).join('')}
         ${(() => { const disc=o.discount_amount||0; const goods=o.total+SHIP_FEE+disc;
           const discRow = disc>0 ? `<div class="irow"><span>🎟 折扣碼 ${o.discount_code||''}</span><span style="color:var(--pinkd)">−$${money(disc)}</span></div>` : '';
           return myship
@@ -971,10 +1005,7 @@ async function toggle(id){
   if(!o) return;
   const isShipped = (o.status||'').startsWith('已');
   if(!isShipped){
-    const items = Array.isArray(o.items) ? o.items : [];
-    const da = Array.isArray(o.items_done) ? o.items_done : [];
-    const allDone = items.length>0 && items.every((_,idx)=>da.includes(idx));
-    if(!allDone){ showToast('⚠️ 還有品項沒打勾哦！'); return; }
+    if(!orderAllDone(o)){ showToast('⚠️ 還有品項沒打勾哦！'); return; }
     if(!o.myship_done){ showToast('⚠️ 顧客還沒下單賣貨便哦！'); return; }
   }
   const next = isShipped ? '待出貨' : '已出貨';
@@ -1033,12 +1064,14 @@ function showCheer(msg){
   confettiBurst();
   setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(), 400); }, 2000);
 }
-async function toggleItemDone(id, idx, cheerMsg){
+async function toggleUnit(id, idx, unit, cheerMsg){
   const o = orders.find(x=>String(x.id)===String(id));
   if(!o) return;
-  let arr = Array.isArray(o.items_done) ? o.items_done.slice() : [];
-  const adding = !arr.includes(idx);
-  arr = adding ? arr.concat(idx) : arr.filter(x=>x!==idx);
+  const set = unitTokens(o);                 // 先正規化（含展開舊資料）
+  const key = idx+'#'+unit;
+  const adding = !set.has(key);
+  if(adding) set.add(key); else set.delete(key);
+  const arr = [...set];
   const resetPacked = !adding && !!o.packed;
   const upd = { items_done: arr };
   if(resetPacked) upd.packed = false;
@@ -1048,8 +1081,7 @@ async function toggleItemDone(id, idx, cheerMsg){
   if(resetPacked) o.packed = false;
   render();
   if(adding){
-    const items = Array.isArray(o.items) ? o.items : [];
-    const remain = items.length - arr.filter(x=>x<items.length).length;
+    const remain = undoneUnits(o);           // 這張單還沒做的單件數
     const msg = cheerMsg ? cheerMsg
               : remain===0 ? '沒人比妳更適合手作了，妳簡直活該發大財！'
               : remain===1 ? '妳這種效率，妳不成功誰成功？'
@@ -1064,9 +1096,15 @@ function completePending(key){
     .slice()
     .sort((a,b)=> new Date(a.created_at||0) - new Date(b.created_at||0));
   for(const o of cand){
-    const da = Array.isArray(o.items_done) ? o.items_done : [];
-    const idx = o.items.findIndex((it,i)=> !da.includes(i) && ((it.emoji||'')+' '+it.name)===key);
-    if(idx>=0){ toggleItemDone(o.id, idx, `已更新 ${o.name||''} 的訂單`); return; }
+    const set = unitTokens(o);
+    for(let idx=0; idx<o.items.length; idx++){
+      const it = o.items[idx];
+      if(((it.emoji||'')+' '+it.name)!==key) continue;
+      const q = it.qty||1;
+      for(let u=0; u<q; u++){
+        if(!set.has(idx+'#'+u)){ toggleUnit(o.id, idx, u, `已更新 ${o.name||''} 的訂單`); return; }
+      }
+    }
   }
 }
 async function toggleMyship(id){
