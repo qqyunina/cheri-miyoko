@@ -663,7 +663,7 @@ async function saveOrderToCloud(o){
 }
 
 /* ---- EmailJS 設定（需攤主填入自己的金鑰才會真的寄信）---- */
-const EMAILJS = { publicKey:'', serviceId:'', templateId:'' };
+const EMAILJS = { publicKey:'O_crufXVe6_AFg21P', serviceId:'service_f0yqyll', templateId:'template_reobsip' };
 const SHIP_URL = 'https://myship.7-11.com.tw/cart/confirm/GM2512220658282';
 let emailjsReady = false;
 try{ if(window.emailjs && EMAILJS.publicKey){ emailjs.init({publicKey:EMAILJS.publicKey}); emailjsReady = true; } }catch(e){}
@@ -709,17 +709,32 @@ function sendOrderEmail(o){
     return;
   }
   note.className = 'emailnote';
-  note.innerHTML = `📧 正在將購買資訊寄到 <b>${o.email}</b>…`;
-  const items = o.items.map(i=>`${i.name} ×${i.qty} = $${money(i.price*i.qty)}`).join('\n');
-  emailjs.send(EMAILJS.serviceId, EMAILJS.templateId, {
-    to_email:o.email, to_name:o.name, order_no:o.no,
-    items, total:money(o.total), last5:o.last5,
-    note:o.note||'—', ship_url:SHIP_URL,
-  }).then(()=>{
-    note.innerHTML = `📧 已寄送購買資訊到 <b>${o.email}</b>，內含賣貨便連結，可用手機開信完成下單 🎀`;
+  note.innerHTML = `📧 正在將訂購確認信寄到 <b>${o.email}</b>…`;
+  const items = o.items.map(i=>`· ${i.name} ×${i.qty}　$${money(i.price*i.qty)}`).join('\n');
+  const subtotal = o.total + SHIP_FEE + (o.discount_amount||0);   // 商品原價合計
+  const params = {
+    to_email: o.email,
+    to_name: o.name || '',
+    order_no: o.no,
+    order_date: o.time || '',
+    ig: '@' + o.ig,
+    email: o.email,
+    items,
+    subtotal: '$' + money(subtotal),
+    discount_line: (o.discount_amount>0) ? ('🎀折扣：-$' + money(o.discount_amount) + (o.discount_code ? ('（' + o.discount_code + '）') : '')) : '',
+    paid: '$' + money(o.total),
+    ship_fee: '$' + money(SHIP_FEE),
+    pay_method: (o.last5==='現場付款') ? '現場付款' : '匯款',
+    ship_method: '7-11 賣貨便',
+    ship_url: SHIP_URL,
+    note: o.note || '—'
+  };
+  emailjs.send(EMAILJS.serviceId, EMAILJS.templateId, params).then(()=>{
+    note.innerHTML = `📧 訂購確認信已寄到 <b>${o.email}</b>，可用手機開信查看 🎀`;
+    toast('已同步寄送確認信件至登入信箱 🎀');
   }).catch(()=>{
     note.className = 'emailnote warn';
-    note.innerHTML = `📧 自動寄信失敗，但訂單已保留。<b>請直接用上方按鈕完成賣貨便下單</b> 🎀`;
+    note.innerHTML = `📧 自動寄信失敗，但訂單已保留。<b>請記得完成上方賣貨便下單</b> 🎀`;
   });
 }
 
