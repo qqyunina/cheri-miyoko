@@ -393,7 +393,7 @@ a.newscard:active{transform:scale(.98)}
           <a class="pbtn full" href="https://myship.7-11.com.tw/cart/confirm/GM2512220658282" target="_blank" rel="noopener">前往賣貨便下單 ›</a>
         </div>
         <div class="emailnote" id="emailNote"></div>
-        <div class="emailhint">📁 確認信可能會被分到「垃圾郵件」或「促銷內容」匣，記得找一下唷 🎀</div>
+        <div class="emailhint" id="emailHint" style="display:none">📁 確認信可能會被分到「垃圾郵件」或「促銷內容」匣，記得找一下唷 🎀</div>
         <div class="rcpt" id="okRcpt"></div>
         <button class="pbtn full" onclick="go('orders')">查看我的訂單</button>
         <div class="cancelnote">若有任何問題，請私訊 <a href="https://www.instagram.com/cheri_miyoko_?igsh=YzRpaTI2eG1vNThx" target="_blank" rel="noopener">櫻櫻美黛子</a></div>
@@ -706,13 +706,12 @@ function confirmPay(){
 
 function sendOrderEmail(o){
   const note = $('emailNote');
-  if(!emailjsReady){
-    note.className = 'emailnote warn';
-    note.innerHTML = `📧 訂單資訊已為你保留。<b>請記得完成上方賣貨便下單</b> 🎀`;
-    return;
-  }
-  note.className = 'emailnote';
+  const hint = $('emailHint');
+  const hideEmailUI = () => { note.style.display='none'; note.innerHTML=''; if(hint) hint.style.display='none'; };
+  if(!emailjsReady){ hideEmailUI(); return; }   // 沒設定就靜默，客人看不到任何錯誤
+  note.style.display=''; note.className = 'emailnote';
   note.innerHTML = `📧 正在將訂購確認信寄到 <b>${o.email}</b>…`;
+  if(hint) hint.style.display='none';
   const items = o.items.map(i=>`· ${i.name} ×${i.qty}　$${money(i.price*i.qty)}`).join('\n');
   const subtotal = o.total + SHIP_FEE + (o.discount_amount||0);   // 商品原價合計
   const params = {
@@ -733,11 +732,12 @@ function sendOrderEmail(o){
     note: o.note || '—'
   };
   emailjs.send(EMAILJS.serviceId, EMAILJS.templateId, params).then(()=>{
+    note.style.display=''; note.className = 'emailnote';
     note.innerHTML = `📧 訂購確認信已寄到 <b>${o.email}</b>`;
+    if(hint) hint.style.display='';
     toast('已同步寄送確認信件至登入信箱 🎀');
   }).catch(()=>{
-    note.className = 'emailnote warn';
-    note.innerHTML = `📧 自動寄信失敗，但訂單已保留。<b>請記得完成上方賣貨便下單</b> 🎀`;
+    hideEmailUI();   // 寄信失敗（含達到每月上限）→ 對客人完全不顯示，訂單照常成立
   });
 }
 
