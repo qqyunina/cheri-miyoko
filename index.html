@@ -126,6 +126,7 @@ a.newscard:active{transform:scale(.98)}
 .tag.hot{background:var(--pink)}
 .tag.soldout{background:#c9aeb8}
 .tag.sale{background:linear-gradient(135deg,#ff9ab8,#e8618c);z-index:2}
+.tag.limit{left:auto;right:10px;background:linear-gradient(135deg,var(--gold),#c79a5f);z-index:2}
 .prod .img{cursor:pointer}
 /* 商品詳情 dialog */
 .dlg{position:fixed;inset:0;z-index:9990;background:rgba(110,70,85,.45);display:flex;align-items:flex-start;justify-content:center;padding:20px 14px;overflow-y:auto}
@@ -492,6 +493,7 @@ const saveOrders = () => localStorage.setItem('mkt_orders',JSON.stringify(orders
 const money = n => (Number(n)||0).toLocaleString();   // 防呆：空值/NaN 一律當 0，避免顯示「NaN」
 const SHIP_FEE = 100;                       // 賣貨便尾款（到店取貨時付）
 let discount = {code:'', amount:0};         // 折扣碼（結帳套用）
+let stockMap = {};                          // 有設數量限制的商品：{ "id": {stock, sold} }
 const effDiscount = () => Math.min(discount.amount||0, Math.max(0, cartTotal()-SHIP_FEE));
 const payable = () => Math.max(0, cartTotal() - SHIP_FEE - effDiscount());
 function resetDiscount(){ discount={code:'',amount:0}; const m=$('discMsg'); if(m){ m.textContent=''; m.style.color=''; } const f=$('fDisc'); if(f) f.value=''; }
@@ -576,13 +578,22 @@ function renderGrid(){
   if(list.length===0){ $('grid').innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="e">🪄</div>施展魔法中<br>敬請期待</div>`; return; }
   $('grid').innerHTML = list.map(p=>{
     const q = cart[p.id]?.qty||0;
-    const ctrl = p.soldout
+    const r = remainOf(p.id);
+    const limited = r!==Infinity;
+    const soldout = p.soldout || (limited && r<=0);
+    const atMax = limited && q>=r;
+    const ctrl = soldout
       ? `<span style="font-size:12px;color:#c9aeb8;font-weight:800">已售完</span>`
       : (q>0
-        ? `<div class="step"><button onclick="chg(${p.id},-1)">−</button><span>${q}</span><button onclick="chg(${p.id},1)">＋</button></div>`
+        ? `<div class="step"><button onclick="chg(${p.id},-1)">−</button><span>${q}</span><button onclick="chg(${p.id},1)" ${atMax?'disabled':''}>＋</button></div>`
         : `<button class="addbtn" onclick="chg(${p.id},1)">＋</button>`);
+    const tagHtml = soldout ? `<span class="tag soldout">售完</span>`
+      : p.onsale ? `<span class="tag sale">優惠</span>`
+      : p.tag ? `<span class="tag ${p.tagt||''}">${p.tag}</span>`
+      : '';
+    const limitBadge = (limited && !soldout) ? `<span class="tag limit">限量剩 ${r}</span>` : '';
     return `<div class="prod" onclick="openDetail(${p.id})">
-      ${p.onsale?`<span class="tag sale">優惠</span>`:(p.tag?`<span class="tag ${p.tagt||''}">${p.tag}</span>`:'')}
+      ${tagHtml}${limitBadge}
       <div class="img"><img src="${p.img}" alt="${p.name}" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.remove()"/><span>${p.emoji}</span></div>
       <div class="body">
         <div class="name">${p.name}</div>
@@ -601,6 +612,11 @@ function chg(id,d){
   if(!p){ delete cart[id]; resetDiscount(); saveCart(); renderGrid(); renderCart(); updateBadge(); toast('該商品已下架，已從購物車移除'); return; } // 商品已不存在→自動移除，避免當掉
   const cur = cart[id]?.qty||0;
   const next = cur+d;
+  if(d>0){                                    // 加購時檢查數量限制
+    const r = remainOf(id);
+    if(r<=0){ toast('此商品已售完'); renderGrid(); return; }
+    if(next>r){ toast(`此商品限量，最多 ${r} 件`); renderGrid(); return; }
+  }
   if(next<=0){ delete cart[id]; } else { cart[id]={qty:next, name:p.name, price:p.price, emoji:p.emoji, img:p.img}; }
   resetDiscount();
   saveCart(); renderGrid(); renderCart(); updateBadge();
@@ -693,6 +709,11 @@ async function submitOrder(){
   const btn=$('submitBtn'), oldTxt=btn?btn.textContent:'';
   if(btn){ btn.disabled=true; btn.textContent='處理中…'; }
   try{
+    // 送出前再次確認庫存：若期間有商品被別人買完/數量不足，先修剪並請客人重新確認
+    const before = JSON.stringify(cart);
+    await refreshStock();
+    if(cartCount()===0){ toast('購物車商品皆已售完'); go('cart'); return; }
+    if(JSON.stringify(cart)!==before){ toast('購物車有商品售完或數量調整，請再確認'); go('cart'); return; }
     const no = await nextOrderNo();
     const ed = effDiscount();
     curOrder = { no, name, ig:user.ig, email:user.email, note, last5:'', items:cartArr(), total:payable(), discount_code:(ed>0?discount.code:''), discount_amount:ed, status:'待匯款', time:new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) };
@@ -718,17 +739,21 @@ function copyAcct(){
 const SUPABASE_URL = 'https://smrxhnidqqgpccztyesg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_mJyhbGar7MK86XkzdjdzYg_fYoVOJ3h';
 const sb = (window.supabase && SUPABASE_URL) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+// 透過伺服器函式 place_order 原子下單：由 DB 鎖定並核對庫存，防止兩人同時搶最後一件都成功
+// 回傳 {ok:true} / {ok:false,reason:'sold_out',product_id,remaining} / {ok:false,reason:'network'}
 async function saveOrderToCloud(o){
-  if(!sb) return true;   // 沒雲端連線（CDN 被擋等極端狀況）→ 不阻擋，仍保留本機單
+  if(!sb) return {ok:true};   // 沒雲端連線（CDN 被擋等極端狀況）→ 不阻擋，仍保留本機單
   try{
-    const { error } = await sb.from('orders').insert({
-      no:o.no, name:o.name, ig:o.ig, email:o.email,
-      note:o.note, last5:o.last5, items:o.items, total:o.total, status:o.status,
+    const payload = {
+      no:o.no, name:o.name, ig:o.ig, email:o.email, note:o.note, last5:o.last5,
+      items:o.items, total:o.total, status:o.status,
       discount_code:o.discount_code||null, discount_amount:o.discount_amount||0
-    });
-    if(error){ console.warn('雲端存單失敗', error); return false; }
-    return true;
-  }catch(e){ console.warn('雲端存單錯誤', e); return false; }
+    };
+    const { data, error } = await sb.rpc('place_order', { p_order: payload });
+    if(error){ console.warn('下單失敗', error); return {ok:false, reason:'network'}; }
+    if(data && data.ok===false) return data;          // 例如 sold_out
+    return {ok:true};
+  }catch(e){ console.warn('下單錯誤', e); return {ok:false, reason:'network'}; }
 }
 
 /* ---- EmailJS 設定（需攤主填入自己的金鑰才會真的寄信）---- */
@@ -755,14 +780,21 @@ async function confirmPay(){
   paying = true;
   const _btn = $('payConfirmBtn'), _txt = _btn ? _btn.textContent : '';
   if(_btn){ _btn.disabled = true; _btn.textContent = '送出中…'; }
-  const ok = await saveOrderToCloud(o);              // 先確認雲端收到，才算正式成立（避免掉單）
-  if(!ok){
+  const res = await saveOrderToCloud(o);             // 由伺服器原子核對庫存＋寫入，成功才算成立
+  if(!res.ok){
     paying = false;
     if(_btn){ _btn.disabled = false; _btn.textContent = _txt; }
-    toast('訂單送出失敗，請檢查網路後再按一次 🥺');
+    if(res.reason==='sold_out'){
+      const p = PRODUCTS.find(x=>String(x.id)===String(res.product_id));
+      toast(`😢 「${p?p.name:'某商品'}」剛剛被搶購一空，已為你更新購物車`);
+      await refreshStock();                          // 更新售完標記＋修剪購物車
+      go('cart');
+    }else{
+      toast('訂單送出失敗，請檢查網路後再按一次 🥺');
+    }
     return;
   }
-  orders.unshift(o);                                 // 雲端成功→正式成立訂單、清購物車
+  orders.unshift(o);                                 // 伺服器成功→正式成立訂單、清購物車
   cart={}; saveCart(); saveOrders(); updateBadge(); resetDiscount();
   $('okNo').textContent = o.no;
   $('okRcpt').innerHTML =
@@ -908,10 +940,46 @@ function go(page){
   if(page==='checkout' && cartCount()===0){ toast('購物車是空的'); page='shop'; }
   PAGES.forEach(p=>$('p-'+p).classList.toggle('active', p===page));
   if(page==='shop') renderGrid();
-  if(page==='cart') renderCart();
-  if(page==='checkout'){ renderUserChips(); renderCheckout(); }
+  if(page==='cart'){ renderCart(); refreshStock(); }
+  if(page==='checkout'){ renderUserChips(); renderCheckout(); refreshStock(); }
   if(page==='orders'){ renderUserChips(); renderOrders(); fetchMyOrdersFromCloud(); }
   const s=document.querySelector('.page.active .scroll'); if(s) s.scrollTop=0;
+}
+
+/* ---- 數量限制 / 售完處理 ---- */
+function remainOf(id){
+  const s = stockMap[id] || stockMap[String(id)];
+  if(!s || s.stock==null) return Infinity;         // 沒設限
+  return Math.max(0, s.stock - (s.sold||0));
+}
+function applyStockToProducts(){
+  PRODUCTS.forEach(p=>{
+    const s = stockMap[p.id] || stockMap[String(p.id)];
+    if(s && s.stock!=null) p.soldout = (s.stock - (s.sold||0)) <= 0;
+  });
+}
+function pruneCartByStock(){
+  let removed=false, clamped=false;
+  Object.keys(cart).forEach(id=>{
+    const r = remainOf(id);
+    if(r===Infinity) return;
+    if(r<=0){ delete cart[id]; removed=true; }                       // 已被買完→從購物車消失
+    else if((cart[id].qty||0) > r){ cart[id].qty = r; clamped=true; } // 剩不夠→調到可買數量
+  });
+  if(removed||clamped){ resetDiscount(); saveCart(); updateBadge(); }
+  if(removed) toast('部分商品已售完，已從購物車移除');
+  else if(clamped) toast('部分商品數量不足，已調整購買數量');
+}
+async function refreshStock(){
+  if(!sb) return;
+  try{
+    const { data, error } = await sb.rpc('get_stock_status');
+    if(error || !data || typeof data!=='object') return;
+    stockMap = data;
+    applyStockToProducts();
+    pruneCartByStock();
+    renderGrid(); renderCart();
+  }catch(e){}
 }
 
 // 從雲端讀取「上架中」的商品來取代預設清單（讀不到或還沒商品時，保留預設不弄壞頁面）
@@ -938,6 +1006,7 @@ async function loadCatalog(){
       tag: '', tagt: ''
     }));
     renderCats(); renderGrid();
+    refreshStock();                 // 商品載入後，抓售出數量標記售完 / 修剪購物車
   }catch(e){ /* 保留預設清單 */ }
 }
 

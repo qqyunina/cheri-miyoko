@@ -170,6 +170,8 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .movebtn{width:32px;height:26px;border:1.5px solid var(--bo);background:#fff;color:var(--pinkd);border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;padding:0;line-height:1}
 .movebtn:disabled{opacity:.28;cursor:default}
 .movebtn:not(:disabled):active{transform:scale(.9)}
+.pcard.dragging{opacity:.92;transform:scale(1.02);box-shadow:0 16px 34px rgba(200,140,165,.42);position:relative;z-index:5;background:#fff;touch-action:none}
+.pcard{transition:box-shadow .15s}
 /* 彈窗表單 */
 .modal{position:fixed;inset:0;z-index:9990;background:rgba(110,70,85,.4);display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;overflow-y:auto}
 .modal-card{width:100%;max-width:440px;background:var(--card);border-radius:22px;padding:20px;box-shadow:0 18px 50px rgba(150,90,115,.35);border:2px solid #fff;margin:auto}
@@ -298,6 +300,7 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
             <label>價錢<input id="p_price" type="number" inputmode="numeric" placeholder="1280"/></label>
             <label>Emoji（沒圖時顯示）<input id="p_emoji" type="text" placeholder="🦢"/></label>
           </div>
+          <label>數量限制（留空＝不限；售完會自動顯示 Sold out、無法下單）<input id="p_stock" type="number" inputmode="numeric" min="0" placeholder="不限"/></label>
           <label>商品敘述<textarea id="p_descr" rows="2" placeholder="蕾絲荷葉＋羊毛氈天鵝，珍珠鏈"></textarea></label>
           <label>商品圖片
             <div class="uploader">
@@ -717,7 +720,7 @@ function switchMode(m){
   $('orderView').style.display = m==='order'?'block':'none';
   $('productView').style.display = m==='product'?'block':'none';
   $('subtitle').textContent = m==='order'?'· 訂單管理後台':'· 商品管理後台';
-  if(m==='product'){ loadProducts(); loadEventCode(); buildNewsRows(); loadNews(); loadDiscounts(); }
+  if(m==='product'){ loadProducts(); loadEventCode(); buildNewsRows(); loadNews(); loadDiscounts(); initProdDrag(); }
 }
 
 /* ========== 折扣碼管理 ========== */
@@ -880,6 +883,11 @@ function prodState(p){
   if(p.shelf_off && new Date(p.shelf_off).getTime()<now) return {t:'已過期', c:'off'};
   return {t:'上架中', c:'on'};
 }
+function soldCountOf(id){   // 這個商品在所有訂單裡被買的總數
+  let n=0;
+  orders.forEach(o=>{ (Array.isArray(o.items)?o.items:[]).forEach(it=>{ if(String(it.id)===String(id)) n+=(it.qty||1); }); });
+  return n;
+}
 function renderProducts(){
   const el=$('prodList');
   if(products.length===0){ el.innerHTML=`<div class="empty"><div class="e">🛍</div>還沒有商品，點「＋ 新增商品」開始吧～</div>`; return; }
@@ -889,12 +897,13 @@ function renderProducts(){
     const ser = p.series ? ' ・ '+p.series+(p.series_code?'（'+p.series_code+'）':'') : '';
     const sale = p.on_sale ? ' <span class="pstate on" style="background:#ffe6ef;color:#c94f78">🏷️優惠</span>' : '';
     const active = p.active!==false;
-    return `<div class="pcard">
+    return `<div class="pcard" data-id="${p.id}">
       ${img}
       <div class="pinfo">
         <div class="pname">${p.name||'(未命名)'} <span class="pstate ${st.c}">${st.t}</span>${sale}</div>
         <div class="pmeta">${p.tab||'—'}${ser}</div>
         <div class="pmeta">$${(p.price||0).toLocaleString()}　🕒 ${fmtShelf(p.shelf_on)} ~ ${fmtShelf(p.shelf_off)}</div>
+        ${p.stock!=null?`<div class="pmeta">🎯 限量 ${p.stock}・已售 ${soldCountOf(p.id)}・剩 <b style="color:${(p.stock-soldCountOf(p.id))<=0?'#c0392b':'#4a7a58'}">${Math.max(0,p.stock-soldCountOf(p.id))}</b></div>`:''}
       </div>
       <div class="pact">
         <div class="movegrp">
@@ -914,6 +923,7 @@ function fillForm(p){
   $('p_name').value=p.name||''; $('p_tab').value=p.tab||'現貨商品';
   $('p_series').value=p.series||''; $('p_scode').value=p.series_code||'';
   $('p_price').value=p.price||''; $('p_emoji').value=p.emoji||''; $('p_descr').value=p.descr||'';
+  $('p_stock').value = (p.stock!=null) ? p.stock : '';
   $('p_on').value=toLocalInput(p.shelf_on); $('p_off').value=toLocalInput(p.shelf_off);
   $('p_onsale').checked = !!p.on_sale;
   $('p_detail').value = p.detail||'';
@@ -979,6 +989,8 @@ async function saveProduct(){
   if(!name){ showToast('請填商品名稱'); return; }
   const price = parseInt($('p_price').value,10);
   if(!(price>0)){ showToast('請填寫商品金額'); $('p_price').focus(); return; }   // 防呆：金額未填/非正數不可送出
+  const stockRaw = ($('p_stock').value||'').trim();
+  const stock = stockRaw==='' ? null : Math.max(0, parseInt(stockRaw,10)||0);   // 留空＝不限
   // 舊商品沒有縮圖時，直接從既有大圖產一張（不用重新上傳）
   if(pImageUrl && !pThumb){ try{ pThumb = await srcToJpeg(pImageUrl, 320, 0.55); }catch(e){} }
   const row={
@@ -987,6 +999,7 @@ async function saveProduct(){
     series:$('p_series').value.trim(),
     series_code:$('p_scode').value.trim().toUpperCase(),
     price,
+    stock,
     emoji:$('p_emoji').value.trim(),
     descr:$('p_descr').value.trim(),
     image_url:pImageUrl||null,
@@ -1004,19 +1017,75 @@ async function saveProduct(){
   if(error){ showToast('儲存失敗：'+error.message); return; }
   closeProductForm(); showToast(editingId?'已更新商品 🎀':'已新增商品 🎀'); loadProducts();
 }
-// 商品排序：上/下移。交換後把整份重編 sort=索引，只寫回有變動的列（相鄰交換通常只 2 筆）
-async function moveProduct(id, dir){
-  const idx = products.findIndex(p=>p.id===id);
-  const j = idx + dir;
-  if(idx<0 || j<0 || j>=products.length) return;
-  [products[idx], products[j]] = [products[j], products[idx]];   // 陣列內交換
-  renderProducts();                                              // 先更新畫面
+// 把目前 products 陣列順序寫回 DB 的 sort（只更新有變動的列）
+async function persistOrder(){
   const updates = [];
   products.forEach((p,i)=>{ if(p.sort!==i){ p.sort=i; updates.push(p); } });
   for(const p of updates){
     const { error } = await sb.from('products').update({sort:p.sort}).eq('id',p.id);
     if(error){ showToast('排序儲存失敗：'+error.message); loadProducts(); return; }
   }
+}
+// 商品排序：上/下移一格
+async function moveProduct(id, dir){
+  const idx = products.findIndex(p=>p.id===id);
+  const j = idx + dir;
+  if(idx<0 || j<0 || j>=products.length) return;
+  [products[idx], products[j]] = [products[j], products[idx]];
+  renderProducts();
+  await persistOrder();
+}
+// 長按拖曳排序：在商品卡上按住約 0.35 秒後可上下拖移
+let _dragCard=null;
+function initProdDrag(){
+  const list=$('prodList');
+  if(!list || list.dataset.dragInit) return;
+  list.dataset.dragInit='1';
+  list.addEventListener('pointerdown', e=>{
+    if(e.target.closest('button')) return;                 // 點按鈕（上下移/編輯/刪除）不啟動拖曳
+    const card=e.target.closest('.pcard'); if(!card) return;
+    const startY=e.clientY, startX=e.clientX, pid=e.pointerId;
+    let started=false, timer=setTimeout(begin, 350);
+    function begin(){
+      started=true; _dragCard=card; card.classList.add('dragging');
+      document.body.style.overflow='hidden';
+      try{ card.setPointerCapture(pid); }catch(_){}
+      if(navigator.vibrate){ try{ navigator.vibrate(15); }catch(_){}}
+    }
+    function move(ev){
+      if(!started){                                        // 長按前若明顯移動→視為捲動，取消
+        if(Math.abs(ev.clientY-startY)>10 || Math.abs(ev.clientX-startX)>10){ clearTimeout(timer); done(); }
+        return;
+      }
+      ev.preventDefault();
+      const after=cardAfter(list, ev.clientY);
+      if(after==null){ if(list.lastElementChild!==card) list.appendChild(card); }
+      else if(after!==card){ list.insertBefore(card, after); }
+    }
+    function up(){ clearTimeout(timer); if(started) commitDrag(); done(); }
+    function done(){
+      document.removeEventListener('pointermove',move);
+      document.removeEventListener('pointerup',up);
+      document.removeEventListener('pointercancel',up);
+    }
+    document.addEventListener('pointermove',move,{passive:false});
+    document.addEventListener('pointerup',up);
+    document.addEventListener('pointercancel',up);
+  });
+}
+function cardAfter(container,y){
+  const els=[...container.querySelectorAll('.pcard:not(.dragging)')];
+  for(const el of els){ const r=el.getBoundingClientRect(); if(y < r.top + r.height/2) return el; }
+  return null;
+}
+async function commitDrag(){
+  const list=$('prodList');
+  if(_dragCard) _dragCard.classList.remove('dragging');
+  _dragCard=null; document.body.style.overflow='';
+  const ids=[...list.querySelectorAll('.pcard')].map(el=>+el.dataset.id);
+  products.sort((a,b)=>ids.indexOf(a.id)-ids.indexOf(b.id));
+  renderProducts();
+  await persistOrder();
 }
 async function toggleActive(id){
   const p=products.find(x=>x.id===id); if(!p) return;
