@@ -593,7 +593,7 @@ function renderGrid(){
       : p.tag ? `<span class="tag ${p.tagt||''}">${p.tag}</span>`
       : '';
     const limitBadge = (limited && !soldout) ? `<span class="tag limit">限量剩 ${r}</span>` : '';
-    return `<div class="prod" onclick="openDetail(${p.id})">
+    return `<div class="prod" onclick="openDetail(${p.id})" onpointerdown="prefetchDetail(${p.id})" onmouseenter="prefetchDetail(${p.id})">
       ${tagHtml}${limitBadge}
       <div class="img"><img src="${p.img}" alt="${p.name}" loading="lazy" draggable="false" oncontextmenu="return false" onerror="this.remove()"/><span>${p.emoji}</span></div>
       <div class="body">
@@ -1023,33 +1023,44 @@ function dlgRender(p, txt, imgs){
     : (p.img ? dlgImg(p.img) : `<div class="demoji">${p.emoji}</div>`);
   return head + gallery + `<div class="dprice">$${p.price}</div>`;
 }
+// 抓詳情（大圖＋內文），結果快取在商品物件上；用 _detailPromise 讓「預抓」與「開啟」共用同一次請求
+function fetchDetail(p){
+  if(p._detailLoaded) return Promise.resolve();
+  if(p._detailPromise) return p._detailPromise;
+  p._detailPromise = (async()=>{
+    let txt = esc(p.desc||''), imgs = p.img ? [p.img] : null;   // 讀不到雲端時的預設
+    if(sb){
+      try{
+        const { data } = await sb.from('active_products').select('image_url,detail,detail_images').eq('id',p.id).maybeSingle();
+        if(data){
+          const di = Array.isArray(data.detail_images)?data.detail_images:[];
+          imgs = di.length ? di : (data.image_url ? [data.image_url] : (p.img?[p.img]:null));
+          txt = (data.detail && data.detail.trim()) ? esc(data.detail).replace(/\n/g,'<br>') : esc(p.desc||'');
+        }
+      }catch(e){}
+    }
+    p._txt=txt; p._imgs=imgs; p._detailLoaded=true;
+  })();
+  return p._detailPromise;
+}
+function prefetchDetail(id){ const p = PRODUCTS.find(x=>x.id===id); if(p && !p._detailLoaded) fetchDetail(p); } // 手指按下/滑過先偷跑
+function dlgLoadingBody(p){   // 立即畫面：名稱＋縮圖（已快取＝瞬間）＋價格，文字待補
+  const img = p.img ? `<img class="dimg" src="${p.img}"/>` : `<div class="demoji">${p.emoji}</div>`;
+  return `<div class="dname">${esc(p.name)}</div><div class="dloading">🎀 載入中…</div>${img}<div class="dprice">$${p.price}</div>`;
+}
 async function openDetail(id){
   const p = PRODUCTS.find(x=>x.id===id); if(!p) return;
   dlgId=id; dlgN=1; if($('dlgQ')) $('dlgQ').textContent='1';
-  if(p._detailLoaded){                                  // 已載過→直接顯示完整內容，不再閃
+  if(p._detailLoaded){                                  // 已載過→直接顯示完整內容
     $('dlgBody').innerHTML = dlgRender(p, p._txt, p._imgs);
     $('detailModal').style.display='flex';
     return;
   }
-  // 先顯示「載入中」，不要先秀簡短敘述又被詳情蓋掉（那樣看起來像 bug）
-  $('dlgBody').innerHTML = `<div class="dname">${esc(p.name)}</div><div class="dloading">🎀 載入中…</div><div class="dprice">$${p.price}</div>`;
+  $('dlgBody').innerHTML = dlgLoadingBody(p);            // 先秒顯示縮圖＋名稱＋價格
   $('detailModal').style.display='flex';
-  let txt = esc(p.desc||''), imgs = p.img ? [p.img] : null;   // 讀不到雲端時的預設
-  if(sb){
-    try{
-      // 點進來才載大圖與詳情（image_url 為詳情大圖；有 detail_images 則優先用）
-      const { data } = await sb.from('active_products').select('image_url,detail,detail_images').eq('id',id).maybeSingle();
-      if(dlgId!==id) return; // 期間已關閉或換商品
-      if(data){
-        const di = Array.isArray(data.detail_images)?data.detail_images:[];
-        imgs = di.length ? di : (data.image_url ? [data.image_url] : (p.img?[p.img]:null));
-        txt = (data.detail && data.detail.trim()) ? esc(data.detail).replace(/\n/g,'<br>') : esc(p.desc||'');
-      }
-    }catch(e){}
-  }
-  if(dlgId!==id) return;
-  p._txt=txt; p._imgs=imgs; p._detailLoaded=true;        // 快取：之後再開同一商品即時顯示、不再抓取
-  $('dlgBody').innerHTML = dlgRender(p, txt, imgs);
+  await fetchDetail(p);                                  // 若已預抓，這裡幾乎立即返回
+  if(dlgId!==id) return;                                 // 期間已關閉或換商品
+  $('dlgBody').innerHTML = dlgRender(p, p._txt, p._imgs);
 }
 function closeDetail(){ dlgId=null; $('detailModal').style.display='none'; }
 function dlgQty(d){ dlgN=Math.max(1,dlgN+d); if($('dlgQ')) $('dlgQ').textContent=dlgN; }
