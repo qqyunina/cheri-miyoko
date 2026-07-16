@@ -137,6 +137,7 @@ a.newscard:active{transform:scale(.98)}
 .dlg-body .demoji{font-size:80px;text-align:center;padding:34px;background:radial-gradient(circle at 50% 35%,#fff,var(--pinkl));border-radius:16px}
 .dlg-body .dname{font-size:19px;font-weight:900;color:var(--txd)}
 .dlg-body .dprice{font-size:20px;font-weight:900;color:var(--pinkd)}
+.dlg-body .dloading{padding:38px 0;text-align:center;color:var(--mu);font-size:13px;font-weight:700}
 .dlg-body .ddesc{font-size:13.5px;color:var(--tx);line-height:1.75;word-break:break-word}
 .dlg-foot{display:flex;align-items:center;gap:8px;border-top:1px dashed var(--bo);padding-top:14px;position:sticky;bottom:-18px;background:var(--card);flex-wrap:wrap}
 .dlg-foot .step{flex-shrink:0}
@@ -939,6 +940,7 @@ function go(page){
   if((page==='checkout'||page==='orders') && !user){ pendingPage=page; requireLogin(); if(page==='orders') return; }
   if(page==='checkout' && cartCount()===0){ toast('購物車是空的'); page='shop'; }
   PAGES.forEach(p=>$('p-'+p).classList.toggle('active', p===page));
+  try{ localStorage.setItem('mkt_page', page); }catch(e){}   // 記住當前頁，重整時停在原地
   if(page==='shop') renderGrid();
   if(page==='cart'){ renderCart(); refreshStock(); }
   if(page==='checkout'){ renderUserChips(); renderCheckout(); refreshStock(); }
@@ -1024,8 +1026,15 @@ function dlgRender(p, txt, imgs){
 async function openDetail(id){
   const p = PRODUCTS.find(x=>x.id===id); if(!p) return;
   dlgId=id; dlgN=1; if($('dlgQ')) $('dlgQ').textContent='1';
-  $('dlgBody').innerHTML = dlgRender(p, esc(p.desc||''), null);
+  if(p._detailLoaded){                                  // 已載過→直接顯示完整內容，不再閃
+    $('dlgBody').innerHTML = dlgRender(p, p._txt, p._imgs);
+    $('detailModal').style.display='flex';
+    return;
+  }
+  // 先顯示「載入中」，不要先秀簡短敘述又被詳情蓋掉（那樣看起來像 bug）
+  $('dlgBody').innerHTML = `<div class="dname">${esc(p.name)}</div><div class="dloading">🎀 載入中…</div><div class="dprice">$${p.price}</div>`;
   $('detailModal').style.display='flex';
+  let txt = esc(p.desc||''), imgs = p.img ? [p.img] : null;   // 讀不到雲端時的預設
   if(sb){
     try{
       // 點進來才載大圖與詳情（image_url 為詳情大圖；有 detail_images 則優先用）
@@ -1033,12 +1042,14 @@ async function openDetail(id){
       if(dlgId!==id) return; // 期間已關閉或換商品
       if(data){
         const di = Array.isArray(data.detail_images)?data.detail_images:[];
-        const imgs = di.length ? di : (data.image_url ? [data.image_url] : null);
-        const txt = (data.detail && data.detail.trim()) ? esc(data.detail).replace(/\n/g,'<br>') : esc(p.desc||'');
-        $('dlgBody').innerHTML = dlgRender(p, txt, imgs);
+        imgs = di.length ? di : (data.image_url ? [data.image_url] : (p.img?[p.img]:null));
+        txt = (data.detail && data.detail.trim()) ? esc(data.detail).replace(/\n/g,'<br>') : esc(p.desc||'');
       }
     }catch(e){}
   }
+  if(dlgId!==id) return;
+  p._txt=txt; p._imgs=imgs; p._detailLoaded=true;        // 快取：之後再開同一商品即時顯示、不再抓取
+  $('dlgBody').innerHTML = dlgRender(p, txt, imgs);
 }
 function closeDetail(){ dlgId=null; $('detailModal').style.display='none'; }
 function dlgQty(d){ dlgN=Math.max(1,dlgN+d); if($('dlgQ')) $('dlgQ').textContent=dlgN; }
@@ -1093,6 +1104,8 @@ renderCats(); renderGrid(); renderCart(); updateBadge(); renderUserChips();
 if(user) fetchMyOrdersFromCloud();   // 已登入的訪客一進站就從雲端同步訂單
 renderNews(); loadNews();
 loadCatalog();
+// 重整後停留在原本的頁面（只還原購物車/我的訂單；付款/成功頁因狀態已失效不還原）
+(function(){ let p=''; try{ p=localStorage.getItem('mkt_page')||''; }catch(e){} if(p==='cart'||p==='orders') go(p); })();
 </script>
 </body>
 </html>
