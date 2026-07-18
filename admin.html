@@ -313,7 +313,8 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
             <label>上架時間<input id="p_on" type="datetime-local"/></label>
             <label>下架時間<input id="p_off" type="datetime-local"/></label>
           </div>
-          <label class="switchrow"><span>🏷️ 優惠商品（開啟則小卡左上角顯示「優惠」標籤）</span><input id="p_onsale" type="checkbox"/></label>
+          <label class="switchrow"><span>🏷️ 優惠商品（開啟後填優惠價，客人頁會畫掉原價、顯示優惠價）</span><input id="p_onsale" type="checkbox" onchange="toggleSaleRow()"/></label>
+          <label id="saleRow" style="display:none">優惠價格（$，需低於原價）<input id="p_saleprice" type="number" inputmode="numeric" min="0" placeholder="例：990"/></label>
           <label>商品詳情內文（客人點商品照片會跳出，可換行）<textarea id="p_detail" rows="4" placeholder="材質、尺寸、注意事項…"></textarea></label>
           <label>商品詳情圖片（可多張）
             <div class="uploader">
@@ -902,7 +903,7 @@ function renderProducts(){
       <div class="pinfo">
         <div class="pname">${p.name||'(未命名)'} <span class="pstate ${st.c}">${st.t}</span>${sale}</div>
         <div class="pmeta">${p.tab||'—'}${ser}</div>
-        <div class="pmeta">$${(p.price||0).toLocaleString()}　🕒 ${fmtShelf(p.shelf_on)} ~ ${fmtShelf(p.shelf_off)}</div>
+        <div class="pmeta">${(p.on_sale && p.sale_price!=null)?`<span style="text-decoration:line-through;color:var(--mu)">$${(p.price||0).toLocaleString()}</span> <b style="color:#c94f78">$${p.sale_price.toLocaleString()}</b>`:`$${(p.price||0).toLocaleString()}`}　🕒 ${fmtShelf(p.shelf_on)} ~ ${fmtShelf(p.shelf_off)}</div>
         ${p.stock!=null?`<div class="pmeta">🎯 限量 ${p.stock}・已售 ${soldCountOf(p.id)}・剩 <b style="color:${(p.stock-soldCountOf(p.id))<=0?'#c0392b':'#4a7a58'}">${Math.max(0,p.stock-soldCountOf(p.id))}</b></div>`:''}
       </div>
       <div class="pact">
@@ -926,6 +927,8 @@ function fillForm(p){
   $('p_stock').value = (p.stock!=null) ? p.stock : '';
   $('p_on').value=toLocalInput(p.shelf_on); $('p_off').value=toLocalInput(p.shelf_off);
   $('p_onsale').checked = !!p.on_sale;
+  $('p_saleprice').value = (p.sale_price!=null) ? p.sale_price : '';
+  toggleSaleRow();
   $('p_detail').value = p.detail||'';
   detailImages = Array.isArray(p.detail_images) ? p.detail_images.slice() : [];
   renderDetImgs();
@@ -934,6 +937,7 @@ function fillForm(p){
   if(pImageUrl){ $('p_imgprev').src=pImageUrl; $('p_imgprev').style.display='block'; } else { $('p_imgprev').style.display='none'; $('p_imgprev').src=''; }
   $('p_imgfile').value=''; $('p_imgstatus').textContent='';
 }
+function toggleSaleRow(){ $('saleRow').style.display = $('p_onsale').checked ? '' : 'none'; }
 function openProductForm(){ editingId=null; $('prodModalTitle').textContent='新增商品'; fillForm({}); $('prodModal').style.display='flex'; }
 function editProduct(id){ const p=products.find(x=>x.id===id); if(!p) return; editingId=id; $('prodModalTitle').textContent='編輯商品'; fillForm(p); $('prodModal').style.display='flex'; }
 function closeProductForm(){ $('prodModal').style.display='none'; }
@@ -991,6 +995,13 @@ async function saveProduct(){
   if(!(price>0)){ showToast('請填寫商品金額'); $('p_price').focus(); return; }   // 防呆：金額未填/非正數不可送出
   const stockRaw = ($('p_stock').value||'').trim();
   const stock = stockRaw==='' ? null : Math.max(0, parseInt(stockRaw,10)||0);   // 留空＝不限
+  const onSale = $('p_onsale').checked;
+  let salePrice = null;
+  if(onSale){                                                                    // 優惠商品必須填合理優惠價
+    salePrice = parseInt($('p_saleprice').value,10);
+    if(!(salePrice>0)){ showToast('優惠商品請填優惠價格'); $('p_saleprice').focus(); return; }
+    if(salePrice>=price){ showToast('優惠價要低於原價'); $('p_saleprice').focus(); return; }
+  }
   // 舊商品沒有縮圖時，直接從既有大圖產一張（不用重新上傳）
   if(pImageUrl && !pThumb){ try{ pThumb = await srcToJpeg(pImageUrl, 320, 0.55); }catch(e){} }
   const row={
@@ -1006,7 +1017,8 @@ async function saveProduct(){
     thumb:pThumb||null,
     shelf_on:fromLocalInput($('p_on').value),
     shelf_off:fromLocalInput($('p_off').value),
-    on_sale:$('p_onsale').checked,
+    on_sale:onSale,
+    sale_price:salePrice,
     detail:$('p_detail').value.trim(),
     detail_images:detailImages
   };

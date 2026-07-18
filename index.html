@@ -119,6 +119,8 @@ a.newscard:active{transform:scale(.98)}
 .prod .row{display:flex;align-items:center;justify-content:space-between}
 .prod .price{font-size:17px;font-weight:900;color:var(--pinkd)}
 .prod .price small{font-size:11px;font-weight:600;color:var(--mu)}
+.orig{text-decoration:line-through;color:var(--mu);font-weight:600;font-size:.72em;margin-right:5px}
+.sale{color:#e8618c}
 .addbtn{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--pink),var(--pinkd));color:#fff;border:none;font-size:22px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(220,120,160,.35);transition:box-shadow .2s,transform .1s}
 .addbtn:hover{box-shadow:0 6px 16px rgba(220,120,160,.55)}
 .addbtn:active{transform:scale(.88)}
@@ -600,7 +602,7 @@ function renderGrid(){
         <div class="name">${p.name}</div>
         <div class="desc">${p.desc}</div>
         <div class="row">
-          <div class="price">$${p.price}</div>
+          <div class="price">${priceHtml(p)}</div>
           <span class="ctrlwrap" style="display:inline-flex" onclick="event.stopPropagation()">${ctrl}</span>
         </div>
       </div>
@@ -618,7 +620,7 @@ function chg(id,d){
     if(r<=0){ toast('此商品已售完'); renderGrid(); return; }
     if(next>r){ toast(`此商品限量，最多 ${r} 件`); renderGrid(); return; }
   }
-  if(next<=0){ delete cart[id]; } else { cart[id]={qty:next, name:p.name, price:p.price, emoji:p.emoji, img:p.img}; }
+  if(next<=0){ delete cart[id]; } else { cart[id]={qty:next, name:p.name, price:effPrice(p), emoji:p.emoji, img:p.img}; }
   resetDiscount();
   saveCart(); renderGrid(); renderCart(); updateBadge();
   if(d>0 && cur===0) toast('已加入購物車 🎀');
@@ -948,6 +950,17 @@ function go(page){
   const s=document.querySelector('.page.active .scroll'); if(s) s.scrollTop=0;
 }
 
+/* ---- 優惠價 ---- */
+function effPrice(p){   // 實際成交價：有優惠且優惠價合理→用優惠價，否則原價
+  return (p.onsale && p.salePrice!=null && p.salePrice>0 && p.salePrice<p.price) ? p.salePrice : p.price;
+}
+function priceHtml(p){  // 顯示：有優惠→原價畫掉＋優惠價；否則原價
+  const eff = effPrice(p);
+  return eff<p.price
+    ? `<span class="orig">$${money(p.price)}</span><span class="sale">$${money(eff)}</span>`
+    : `$${money(p.price)}`;
+}
+
 /* ---- 數量限制 / 售完處理 ---- */
 function remainOf(id){
   const s = stockMap[id] || stockMap[String(id)];
@@ -957,7 +970,10 @@ function remainOf(id){
 function applyStockToProducts(){
   PRODUCTS.forEach(p=>{
     const s = stockMap[p.id] || stockMap[String(p.id)];
-    if(s && s.stock!=null) p.soldout = (s.stock - (s.sold||0)) <= 0;
+    if(s){
+      if(s.stock!=null) p.soldout = (s.stock - (s.sold||0)) <= 0;
+      p.salePrice = (s.sale_price!=null) ? s.sale_price : null;   // 優惠價（來自後台）
+    }
   });
 }
 function pruneCartByStock(){
@@ -972,16 +988,19 @@ function pruneCartByStock(){
   if(removed) toast('部分商品已售完，已從購物車移除');
   else if(clamped) toast('部分商品數量不足，已調整購買數量');
 }
-async function refreshStock(){
+async function fetchExtras(){   // 抓庫存＋優惠價並套用到 PRODUCTS（不負責畫面）
   if(!sb) return;
   try{
     const { data, error } = await sb.rpc('get_stock_status');
     if(error || !data || typeof data!=='object') return;
     stockMap = data;
     applyStockToProducts();
-    pruneCartByStock();
-    renderGrid(); renderCart();
   }catch(e){}
+}
+async function refreshStock(){
+  await fetchExtras();
+  pruneCartByStock();
+  renderGrid(); renderCart();
 }
 
 // 從雲端讀取「上架中」的商品來取代預設清單（讀不到或還沒商品時，保留預設不弄壞頁面）
@@ -1007,8 +1026,10 @@ async function loadCatalog(){
       onsale: !!r.on_sale,
       tag: '', tagt: ''
     }));
-    renderCats(); renderGrid();
-    refreshStock();                 // 商品載入後，抓售出數量標記售完 / 修剪購物車
+    renderCats();
+    await fetchExtras();            // 先套用優惠價/庫存，再畫一次到位（避免先閃原價）
+    renderGrid();
+    pruneCartByStock(); renderCart();
   }catch(e){ /* 保留預設清單 */ }
 }
 
@@ -1021,7 +1042,7 @@ function dlgRender(p, txt, imgs){
   const gallery = imgs && imgs.length
     ? imgs.map(dlgImg).join('')
     : (p.img ? dlgImg(p.img) : `<div class="demoji">${p.emoji}</div>`);
-  return head + gallery + `<div class="dprice">$${p.price}</div>`;
+  return head + gallery + `<div class="dprice">${priceHtml(p)}</div>`;
 }
 // 抓詳情（大圖＋內文），結果快取在商品物件上；用 _detailPromise 讓「預抓」與「開啟」共用同一次請求
 function fetchDetail(p){
@@ -1046,7 +1067,7 @@ function fetchDetail(p){
 function prefetchDetail(id){ const p = PRODUCTS.find(x=>x.id===id); if(p && !p._detailLoaded) fetchDetail(p); } // 手指按下/滑過先偷跑
 function dlgLoadingBody(p){   // 立即畫面：名稱＋縮圖（已快取＝瞬間）＋價格，文字待補
   const img = p.img ? `<img class="dimg" src="${p.img}"/>` : `<div class="demoji">${p.emoji}</div>`;
-  return `<div class="dname">${esc(p.name)}</div><div class="dloading">🎀 載入中…</div>${img}<div class="dprice">$${p.price}</div>`;
+  return `<div class="dname">${esc(p.name)}</div><div class="dloading">🎀 載入中…</div>${img}<div class="dprice">${priceHtml(p)}</div>`;
 }
 async function openDetail(id){
   const p = PRODUCTS.find(x=>x.id===id); if(!p) return;
@@ -1067,7 +1088,7 @@ function dlgQty(d){ dlgN=Math.max(1,dlgN+d); if($('dlgQ')) $('dlgQ').textContent
 function dlgAddToCart(){
   const p = PRODUCTS.find(x=>x.id===dlgId); if(!p) return null;
   const cur = cart[dlgId]?.qty||0;
-  cart[dlgId] = { qty:cur+dlgN, name:p.name, price:p.price, emoji:p.emoji, img:p.img };
+  cart[dlgId] = { qty:cur+dlgN, name:p.name, price:effPrice(p), emoji:p.emoji, img:p.img };
   resetDiscount();
   saveCart(); renderGrid(); renderCart(); updateBadge();
   return p;
