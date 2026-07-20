@@ -79,6 +79,8 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .todo-need{color:var(--pinkd);font-weight:800;font-size:12px;margin-left:6px;background:var(--pinkl);padding:1px 8px;border-radius:999px}
 .todo-by{color:#b0b0b0;font-weight:500;font-size:12px;margin-left:6px}
 .vip-sub{color:var(--mu);font-weight:600;font-size:12px;margin-left:5px}
+.vip-qty{flex-shrink:0;color:var(--mu);font-weight:700;font-size:12px;margin:0 6px;white-space:nowrap}
+.vip-row.unsold .vip-qty{color:#b9a7b0}
 .todo-row{display:flex;justify-content:space-between;align-items:center;font-size:14.5px;padding:8px 0;border-bottom:1px dashed var(--bo)}
 .todo-row:last-child{border-bottom:none}
 .donebtn{background:var(--pink);color:#fff;border:none;border-radius:999px;padding:5px 16px;font-size:12.5px;font-weight:800;cursor:pointer;box-shadow:0 3px 9px rgba(200,140,165,.28);flex-shrink:0}
@@ -597,13 +599,13 @@ function render(){
     const prodLegend = prodRows.map((r)=>{
       const sold = r.units>0;
       if(!sold){
-        return `<div class="vip-row unsold"><span class="vip-dot" style="background:#e6dfe2"></span><span class="vip-ig">${r.label}<span class="vip-sub">未售出</span></span><span class="vip-pct">0%</span><span class="vip-rev">$0</span></div>`;
+        return `<div class="vip-row unsold"><span class="vip-dot" style="background:#e6dfe2"></span><span class="vip-ig">${r.label}</span><span class="vip-qty">未售出</span><span class="vip-pct">0%</span><span class="vip-rev">$0</span></div>`;
       }
       const idx = si++;
       const c = palette[idx%palette.length];
       const pct = prodTotal? (r.rev/prodTotal*100) : 0;
       const crown = idx===0 ? '🔥 ' : '';
-      return `<div class="vip-row"><span class="vip-dot" style="background:${c}"></span><span class="vip-ig">${crown}${r.label}<span class="vip-sub">×${r.units}</span></span><span class="vip-pct">${pct.toFixed(1)}%</span><span class="vip-rev">$${money(r.rev)}</span></div>`;
+      return `<div class="vip-row"><span class="vip-dot" style="background:${c}"></span><span class="vip-ig">${crown}${r.label}</span><span class="vip-qty">×${r.units}</span><span class="vip-pct">${pct.toFixed(1)}%</span><span class="vip-rev">$${money(r.rev)}</span></div>`;
     }).join('');
 
     const soldRate = listedKinds>0 ? `　售出率 ${(soldKinds/listedKinds*100).toFixed(0)}%` : '';
