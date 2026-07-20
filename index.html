@@ -1122,6 +1122,14 @@ function renderNews(){
       : `<div class="newscard">${inner}</div>`;
   }).join('');
 }
+// 分類頁籤：讀後台設定的頁籤清單（沒設定時沿用預設）
+async function loadCats(){
+  if(!sb) return;
+  try{
+    const { data } = await sb.from('app_settings').select('value').eq('key','tabs').maybeSingle();
+    if(data && data.value){ const arr = JSON.parse(data.value); if(Array.isArray(arr) && arr.length){ CATS = ['全部', ...arr]; renderCats(); } }
+  }catch(e){}
+}
 async function loadNews(){
   if(sb){
     try{
@@ -1135,6 +1143,7 @@ async function loadNews(){
 renderCats(); renderGrid(); renderCart(); updateBadge(); renderUserChips();
 if(user) fetchMyOrdersFromCloud();   // 已登入的訪客一進站就從雲端同步訂單
 renderNews(); loadNews();
+loadCats();
 loadCatalog();
 // 重整後停留在原本的頁面（只還原購物車/我的訂單；付款/成功頁因狀態已失效不還原）
 (function(){ let p=''; try{ p=localStorage.getItem('mkt_page')||''; }catch(e){} if(p==='cart'||p==='orders') go(p); })();

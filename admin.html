@@ -166,6 +166,9 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .nrow textarea{width:100%;padding:8px 12px;border:1.5px solid var(--bo);border-radius:10px;font-size:13.5px;color:var(--txd);line-height:1.6;min-height:64px;resize:vertical;box-sizing:border-box;font-family:inherit}
 .pact{display:flex;flex-direction:column;gap:8px;align-items:center;flex-shrink:0}
 .btn.sm{padding:6px 14px;font-size:12.5px;border-radius:10px}
+.tabchip{display:inline-flex;align-items:center;gap:6px;background:var(--pinkl);border:1.5px solid var(--bo);border-radius:999px;padding:5px 6px 5px 13px;margin:0 6px 6px 0;font-size:13px;font-weight:700;color:var(--pinkd)}
+.tabchip button{border:none;background:#e7c3d1;color:#fff;width:19px;height:19px;border-radius:50%;font-size:11px;line-height:1;cursor:pointer;padding:0}
+.tabchip button:hover{background:var(--pink)}
 .movegrp{display:flex;gap:5px;margin-bottom:2px}
 .movebtn{width:32px;height:26px;border:1.5px solid var(--bo);background:#fff;color:var(--pinkd);border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;padding:0;line-height:1}
 .movebtn:disabled{opacity:.28;cursor:default}
@@ -278,6 +281,14 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
         <div id="disc_list"></div>
         <button class="btn on" onclick="openDiscForm()" style="margin-top:4px">＋ 新增折扣碼</button>
       </div>
+      <div class="newsedit">
+        <div class="nlbl">🏷 頁籤管理（新增商品時可選的分類，客人頁上方的分類列也會同步）</div>
+        <div id="tab_list"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input id="tab_new" placeholder="新增頁籤名稱（例：新品）" style="flex:1;padding:8px 12px;border:1.5px solid var(--bo);border-radius:10px;font-size:14px;color:var(--txd)"/>
+          <button class="btn on" onclick="addTab()">＋ 新增</button>
+        </div>
+      </div>
       <div class="tools" style="margin-bottom:16px">
         <button class="btn on" onclick="openProductForm()">＋ 新增商品</button>
         <button class="btn" onclick="loadProducts()" title="重新整理">🔄 重新整理</button>
@@ -378,6 +389,10 @@ const metaOpen = new Set();
 const SHIP_FEE = 100;
 /* 現有商品清單（從後台 products 表載入；刪除的商品自動不在內＝不計算，下架的仍在＝計算） */
 let catalogProducts = [];
+/* 商品頁籤（分類）清單，存在 app_settings key='tabs'；攤主可自行增刪 */
+const DEFAULT_TABS = ['聯名商品','現貨商品','口金包','托特包','波奈特帽','髮帶','髮夾','項鍊','戒指','蓬蓬卡套','背帶'];
+let tabList = DEFAULT_TABS.slice();
+let todoTab = '全';   // 待製清單的頁籤篩選
 const $ = id => document.getElementById(id);
 const money = n => (n||0).toLocaleString();
 // 跳脫客人可控欄位（姓名/IG/Email/備註/品項名…），防止儲存型 XSS 在後台執行
@@ -423,7 +438,7 @@ async function boot(){
 }
 function showLogin(){ $('loginView').style.display='flex'; $('appView').style.display='none'; $('resetView').style.display='none'; }
 function showReset(){ $('loginView').style.display='none'; $('appView').style.display='none'; $('resetView').style.display='flex'; }
-async function showApp(){ $('loginView').style.display='none'; $('resetView').style.display='none'; $('appView').style.display='block'; await load(); }
+async function showApp(){ $('loginView').style.display='none'; $('resetView').style.display='none'; $('appView').style.display='block'; await loadTabList(); await load(); }
 async function forgotPw(){
   const err = $('loginErr');
   const email = ($('email').value||'').trim();
@@ -468,7 +483,7 @@ async function load(){
   orders = data || [];
   // 載入現有商品清單（強強榜用；刪除的不會在這份名單裡＝不計算）
   try{
-    const pr = await sb.from('products').select('name,emoji');
+    const pr = await sb.from('products').select('id,name,emoji,tab');
     if(!pr.error && pr.data) catalogProducts = pr.data;
   }catch(e){}
   render();
@@ -620,20 +635,35 @@ function render(){
       its.forEach((it,idx)=>{ const q=it.qty||1; let undone=0; for(let u=0;u<q;u++) if(!set.has(idx+'#'+u)) undone++; if(undone){ const k=(it.emoji||'')+' '+it.name; pending[k]=(pending[k]||0)+undone; } });
     });
     const el0 = $('list');
-    const flat = [];
+    const flatAll = [];   // 全部待製單件，越等越久越前面
     orders.slice().sort((a,b)=> new Date(a.created_at||0) - new Date(b.created_at||0)).forEach(o=>{
       const its = Array.isArray(o.items) ? o.items : [];
       const set = unitTokens(o);
-      its.forEach((it,idx)=>{ const q=it.qty||1; const k=(it.emoji||'')+' '+it.name; for(let u=0;u<q;u++){ if(!set.has(idx+'#'+u)) flat.push({k, who:(o.name||'').trim()}); } });
+      its.forEach((it,idx)=>{ const q=it.qty||1; const k=(it.emoji||'')+' '+it.name; const tab=tabOfItem(it); for(let u=0;u<q;u++){ if(!set.has(idx+'#'+u)) flatAll.push({k, who:(o.name||'').trim(), tab}); } });
     });
-    if(flat.length===0){ el0.innerHTML = `<div class="empty"><div class="e">🎉</div>太棒了！所有品項都做好囉～</div>`; return; }
-    pendingFlat = flat;   // 供「完成」按鈕用索引安全取回品項名，避免把名稱塞進 onclick 造成注入
-    const rows = flat.map(({k,who},fi)=>{
-      const need = pending[k]>1 ? `<span class="todo-need">還缺 ${pending[k]}</span>` : '';
-      const by = who ? `<span class="todo-by">${esc(who)}</span>` : '';
-      return `<div class="irow todo-row"><span>${esc(k)}${need}${by}</span><button class="donebtn" onclick="completePendingAt(${fi})">完成</button></div>`;
+    if(flatAll.length===0){ el0.innerHTML = `<div class="empty"><div class="e">🎉</div>太棒了！所有品項都做好囉～</div>`; return; }
+    // 頁籤篩選列：全 + 每個頁籤（各顯示件數）
+    const countByTab = {}; flatAll.forEach(f=>{ countByTab[f.tab]=(countByTab[f.tab]||0)+1; });
+    const filterBtns = ['全', ...tabList].map(t=>{
+      const n = (t==='全') ? flatAll.length : (countByTab[t]||0);
+      const on = (todoTab||'全')===t;
+      return `<button class="btn ${on?'on':''}" onclick="setTodoTab('${t.replace(/'/g,"\\'")}')">${esc(t)}（${n}）</button>`;
     }).join('');
-    el0.innerHTML = `<div class="card"><div class="todo-h">🧵 待製清單　<span>共 ${flat.length} 件</span></div><div class="todo-hint">⏳ 等越久的商品排越上面哦，「還缺 N」是這個品項還沒做的總數</div>${rows}</div>`;
+    const flat = (!todoTab || todoTab==='全') ? flatAll : flatAll.filter(f=>f.tab===todoTab);
+    pendingFlat = flat;   // 供「完成」按鈕用索引安全取回品項（對應目前篩選後的清單）
+    const body = flat.length
+      ? flat.map(({k,who},fi)=>{
+          const need = pending[k]>1 ? `<span class="todo-need">還缺 ${pending[k]}</span>` : '';
+          const by = who ? `<span class="todo-by">${esc(who)}</span>` : '';
+          return `<div class="irow todo-row"><span>${esc(k)}${need}${by}</span><button class="donebtn" onclick="completePendingAt(${fi})">完成</button></div>`;
+        }).join('')
+      : `<div class="empty" style="padding:28px"><div class="e">🎀</div>這個分類目前沒有待製品項～</div>`;
+    el0.innerHTML = `<div class="card">
+      <div class="todo-h">🧵 待製清單　<span>共 ${flatAll.length} 件</span></div>
+      <div class="todo-hint">⏳ 等越久的商品排越上面哦，「還缺 N」是這個品項還沒做的總數</div>
+      <div class="filters" style="margin:2px 0 12px">${filterBtns}</div>
+      ${body}
+    </div>`;
     return;
   }
 
@@ -721,7 +751,7 @@ function switchMode(m){
   $('orderView').style.display = m==='order'?'block':'none';
   $('productView').style.display = m==='product'?'block':'none';
   $('subtitle').textContent = m==='order'?'· 訂單管理後台':'· 商品管理後台';
-  if(m==='product'){ loadProducts(); loadEventCode(); buildNewsRows(); loadNews(); loadDiscounts(); initProdDrag(); }
+  if(m==='product'){ loadProducts(); loadEventCode(); buildNewsRows(); loadNews(); loadDiscounts(); renderTabsManager(); initProdDrag(); }
 }
 
 /* ========== 折扣碼管理 ========== */
@@ -867,6 +897,57 @@ async function saveEventCode(){
   $('ev_status').textContent='已儲存 ✓　之後的新訂單就會用 '+v+' 開頭';
   setTimeout(()=>{ if($('ev_status')) $('ev_status').textContent=''; }, 4000);
 }
+/* ========== 頁籤（分類）管理 ========== */
+async function loadTabList(){
+  try{
+    const { data } = await sb.from('app_settings').select('value').eq('key','tabs').maybeSingle();
+    if(data && data.value){ const arr = JSON.parse(data.value); if(Array.isArray(arr) && arr.length) tabList = arr; }
+  }catch(e){}
+  renderTabsManager();
+}
+function renderTabsManager(){
+  const el = $('tab_list'); if(!el) return;
+  el.innerHTML = tabList.length
+    ? tabList.map((t,i)=>`<span class="tabchip">${esc(t)}<button onclick="delTab(${i})" title="刪除頁籤">✕</button></span>`).join('')
+    : `<div class="pmeta">目前沒有頁籤，請在下面新增</div>`;
+}
+function populateTabSelect(cur){
+  const sel = $('p_tab'); if(!sel) return;
+  const list = tabList.slice();
+  if(cur && !list.includes(cur)) list.unshift(cur);   // 編輯到已被刪除的頁籤時，仍保留原值可選
+  sel.innerHTML = list.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  if(cur) sel.value = cur;
+}
+async function saveTabList(){
+  const { error } = await sb.from('app_settings').upsert({ key:'tabs', value:JSON.stringify(tabList) }, { onConflict:'key' });
+  if(error){ showToast('儲存失敗：'+error.message); return false; }
+  renderTabsManager(); populateTabSelect($('p_tab') ? $('p_tab').value : '');
+  return true;
+}
+async function addTab(){
+  const v = ($('tab_new').value||'').trim();
+  if(!v){ showToast('請輸入頁籤名稱'); return; }
+  if(tabList.includes(v)){ showToast('已有相同頁籤'); return; }
+  tabList.push(v);
+  if(await saveTabList()){ $('tab_new').value=''; showToast('已新增頁籤 🎀'); }
+  else tabList.pop();
+}
+async function delTab(i){
+  const name = tabList[i]; if(name==null) return;
+  if(!confirm(`刪除頁籤「${name}」？\n（已使用此頁籤的商品不會被刪除，但建議之後幫它們改成別的頁籤）`)) return;
+  const removed = tabList.splice(i,1);
+  if(await saveTabList()) showToast('已刪除頁籤');
+  else tabList.splice(i,0,...removed);   // 失敗還原
+}
+/* 依訂單品項找出它的頁籤（用 id 對應現有商品；找不到再用名稱） */
+function tabOfItem(it){
+  const byId = catalogProducts.find(p=>String(p.id)===String(it.id));
+  if(byId) return byId.tab||'';
+  const byName = catalogProducts.find(p=>p.name===it.name);
+  return byName ? (byName.tab||'') : '';
+}
+function setTodoTab(t){ todoTab = t; render(); }
+
 async function loadProducts(){
   const { data, error } = await sb.from('products').select('*').order('sort',{ascending:true}).order('id',{ascending:true});
   if(error){
@@ -921,7 +1002,7 @@ function renderProducts(){
 function toLocalInput(t){ if(!t) return ''; const d=new Date(t); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
 function fromLocalInput(v){ return v ? new Date(v).toISOString() : null; }
 function fillForm(p){
-  $('p_name').value=p.name||''; $('p_tab').value=p.tab||'現貨商品';
+  $('p_name').value=p.name||''; populateTabSelect(p.tab||'');
   $('p_series').value=p.series||''; $('p_scode').value=p.series_code||'';
   $('p_price').value=p.price||''; $('p_emoji').value=p.emoji||''; $('p_descr').value=p.descr||'';
   $('p_stock').value = (p.stock!=null) ? p.stock : '';
