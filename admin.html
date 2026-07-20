@@ -177,6 +177,11 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .tabchip{display:inline-flex;align-items:center;gap:6px;background:var(--pinkl);border:1.5px solid var(--bo);border-radius:999px;padding:5px 6px 5px 13px;margin:0 6px 6px 0;font-size:13px;font-weight:700;color:var(--pinkd)}
 .tabchip button{border:none;background:#e7c3d1;color:#fff;width:19px;height:19px;border-radius:50%;font-size:11px;line-height:1;cursor:pointer;padding:0}
 .tabchip button:hover{background:var(--pink)}
+.tabpick{display:flex;flex-wrap:wrap;gap:8px}
+.tabpick .tp{padding:7px 14px;border-radius:999px;border:1.5px solid var(--bo);background:#fff;font-size:13px;font-weight:700;color:var(--mu);cursor:pointer;user-select:none;transition:.14s}
+.tabpick .tp.on{background:linear-gradient(135deg,var(--pink),var(--pinkd));border-color:var(--pink);color:#fff;box-shadow:0 3px 9px rgba(220,120,160,.28)}
+.tabpick .tp .tick{font-size:11px;margin-right:3px}
+.tabpick:empty::after,.tabpick .none{content:'';color:var(--mu);font-weight:700;font-size:12.5px}
 .movegrp{display:flex;gap:5px;margin-bottom:2px}
 .movebtn{width:32px;height:26px;border:1.5px solid var(--bo);background:#fff;color:var(--pinkd);border-radius:9px;font-size:11px;font-weight:900;cursor:pointer;padding:0;line-height:1}
 .movebtn:disabled{opacity:.28;cursor:default}
@@ -310,7 +315,7 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
         <div class="modal-h"><b id="prodModalTitle">新增商品</b><button class="modal-x" onclick="closeProductForm()">✕</button></div>
         <div class="pform">
           <label>商品名稱<input id="p_name" type="text" placeholder="例：蕾絲天鵝愛心包"/></label>
-          <label>頁籤<select id="p_tab"><option>聯名商品</option><option>現貨商品</option><option>口金包</option><option>托特包</option><option>波奈特帽</option><option>髮帶</option><option>髮夾</option><option>項鍊</option><option>戒指</option><option>蓬蓬卡套</option><option>背帶</option></select></label>
+          <label>頁籤（可複選，同一商品可歸多個類別）<div id="p_tabs" class="tabpick"></div></label>
           <div class="prow">
             <label>系列 / 主題<input id="p_series" type="text" placeholder="例：天鵝系列"/></label>
             <label>主題代號<input id="p_scode" type="text" placeholder="CY"/></label>
@@ -648,11 +653,11 @@ function render(){
     orders.slice().sort((a,b)=> new Date(a.created_at||0) - new Date(b.created_at||0)).forEach(o=>{
       const its = Array.isArray(o.items) ? o.items : [];
       const set = unitTokens(o);
-      its.forEach((it,idx)=>{ const q=it.qty||1; const k=(it.emoji||'')+' '+it.name; const tab=tabOfItem(it); for(let u=0;u<q;u++){ if(!set.has(idx+'#'+u)) flatAll.push({k, who:(o.name||'').trim(), tab}); } });
+      its.forEach((it,idx)=>{ const q=it.qty||1; const k=(it.emoji||'')+' '+it.name; const tabs=tabsOfItem(it); for(let u=0;u<q;u++){ if(!set.has(idx+'#'+u)) flatAll.push({k, who:(o.name||'').trim(), tabs}); } });
     });
     if(flatAll.length===0){ el0.innerHTML = `<div class="empty"><div class="e">🎉</div>太棒了！所有品項都做好囉～</div>`; return; }
-    // 頁籤篩選列：全 + 每個頁籤（各顯示件數）
-    const countByTab = {}; flatAll.forEach(f=>{ countByTab[f.tab]=(countByTab[f.tab]||0)+1; });
+    // 頁籤篩選列：全 + 每個頁籤（各顯示件數；一件商品若屬多個頁籤，會在每個頁籤都算一次）
+    const countByTab = {}; flatAll.forEach(f=>{ f.tabs.forEach(t=>{ countByTab[t]=(countByTab[t]||0)+1; }); });
     const curTab = todoTab || '全';
     const curN = (curTab==='全') ? flatAll.length : (countByTab[curTab]||0);
     const filterBtns = ['全', ...tabList].map(t=>{
@@ -666,7 +671,7 @@ function render(){
         </button>
         <div class="filters todo-filtpanel" style="${todoFilterOpen?'':'display:none'}">${filterBtns}</div>
       </div>`;
-    const flat = (!todoTab || todoTab==='全') ? flatAll : flatAll.filter(f=>f.tab===todoTab);
+    const flat = (!todoTab || todoTab==='全') ? flatAll : flatAll.filter(f=>f.tabs.includes(todoTab));
     pendingFlat = flat;   // 供「完成」按鈕用索引安全取回品項（對應目前篩選後的清單）
     const body = flat.length
       ? flat.map(({k,who},fi)=>{
@@ -928,17 +933,32 @@ function renderTabsManager(){
     ? tabList.map((t,i)=>`<span class="tabchip">${esc(t)}<button onclick="delTab(${i})" title="刪除頁籤">✕</button></span>`).join('')
     : `<div class="pmeta">目前沒有頁籤，請在下面新增</div>`;
 }
+let selectedTabs = [];   // 商品表單目前選取的頁籤（可複選）
+let tabPickList = [];    // 目前渲染出來的可選頁籤（含已刪除但仍在用的）
+// cur：逗號分隔字串（可能一個或多個），渲染成可點選的粉色籤片
 function populateTabSelect(cur){
-  const sel = $('p_tab'); if(!sel) return;
-  const list = tabList.slice();
-  if(cur && !list.includes(cur)) list.unshift(cur);   // 編輯到已被刪除的頁籤時，仍保留原值可選
-  sel.innerHTML = list.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
-  if(cur) sel.value = cur;
+  const el = $('p_tabs'); if(!el) return;
+  selectedTabs = String(cur||'').split(',').map(s=>s.trim()).filter(Boolean);
+  tabPickList = tabList.slice();
+  selectedTabs.forEach(t=>{ if(!tabPickList.includes(t)) tabPickList.unshift(t); });   // 保留已被刪除但商品仍在用的頁籤
+  el.innerHTML = tabPickList.length
+    ? tabPickList.map((t,i)=>{
+        const on = selectedTabs.includes(t);
+        return `<span class="tp ${on?'on':''}" onclick="toggleTabAt(${i})">${on?'<span class="tick">✓</span>':''}${esc(t)}</span>`;
+      }).join('')
+    : `<span class="none">尚無頁籤，請先到上方「頁籤管理」新增</span>`;
 }
+function toggleTabAt(i){
+  const t = tabPickList[i]; if(t==null) return;
+  const j = selectedTabs.indexOf(t);
+  if(j>=0) selectedTabs.splice(j,1); else selectedTabs.push(t);
+  populateTabSelect(selectedTabs.join(','));
+}
+function getSelectedTabs(){ return selectedTabs.slice(); }
 async function saveTabList(){
   const { error } = await sb.from('app_settings').upsert({ key:'tabs', value:JSON.stringify(tabList) }, { onConflict:'key' });
   if(error){ showToast('儲存失敗：'+error.message); return false; }
-  renderTabsManager(); populateTabSelect($('p_tab') ? $('p_tab').value : '');
+  renderTabsManager(); populateTabSelect(getSelectedTabs().join(','));
   return true;
 }
 async function addTab(){
@@ -956,12 +976,11 @@ async function delTab(i){
   if(await saveTabList()) showToast('已刪除頁籤');
   else tabList.splice(i,0,...removed);   // 失敗還原
 }
-/* 依訂單品項找出它的頁籤（用 id 對應現有商品；找不到再用名稱） */
-function tabOfItem(it){
-  const byId = catalogProducts.find(p=>String(p.id)===String(it.id));
-  if(byId) return byId.tab||'';
-  const byName = catalogProducts.find(p=>p.name===it.name);
-  return byName ? (byName.tab||'') : '';
+/* 依訂單品項找出它的頁籤陣列（用 id 對應現有商品；找不到再用名稱；一個商品可屬多個頁籤） */
+function tabsOfItem(it){
+  const p = catalogProducts.find(p=>String(p.id)===String(it.id)) || catalogProducts.find(p=>p.name===it.name);
+  if(!p) return [];
+  return String(p.tab||'').split(',').map(s=>s.trim()).filter(Boolean);
 }
 function setTodoTab(t){ todoTab = t; todoFilterOpen = false; render(); }
 function toggleTodoFilter(){ todoFilterOpen = !todoFilterOpen; render(); }
@@ -1001,7 +1020,7 @@ function renderProducts(){
       ${img}
       <div class="pinfo">
         <div class="pname">${p.name||'(未命名)'} <span class="pstate ${st.c}">${st.t}</span>${sale}</div>
-        <div class="pmeta">${p.tab||'—'}${ser}</div>
+        <div class="pmeta">${p.tab ? esc(String(p.tab).split(',').map(s=>s.trim()).filter(Boolean).join(' · ')) : '—'}${ser}</div>
         <div class="pmeta">${(p.on_sale && p.sale_price!=null)?`<span style="text-decoration:line-through;color:var(--mu)">$${(p.price||0).toLocaleString()}</span> <b style="color:#c94f78">$${p.sale_price.toLocaleString()}</b>`:`$${(p.price||0).toLocaleString()}`}　🕒 ${fmtShelf(p.shelf_on)} ~ ${fmtShelf(p.shelf_off)}</div>
         ${p.stock!=null?`<div class="pmeta">🎯 限量 ${p.stock}・已售 ${soldCountOf(p.id)}・剩 <b style="color:${(p.stock-soldCountOf(p.id))<=0?'#c0392b':'#4a7a58'}">${Math.max(0,p.stock-soldCountOf(p.id))}</b></div>`:''}
       </div>
@@ -1103,9 +1122,11 @@ async function saveProduct(){
   }
   // 舊商品沒有縮圖時，直接從既有大圖產一張（不用重新上傳）
   if(pImageUrl && !pThumb){ try{ pThumb = await srcToJpeg(pImageUrl, 320, 0.55); }catch(e){} }
+  const tabs = getSelectedTabs();
+  if(tabs.length===0){ showToast('請至少選一個頁籤'); return; }
   const row={
     name,
-    tab:$('p_tab').value,
+    tab:tabs.join(','),
     series:$('p_series').value.trim(),
     series_code:$('p_scode').value.trim().toUpperCase(),
     price,

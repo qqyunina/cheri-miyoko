@@ -576,8 +576,14 @@ function renderCats(){
 }
 function setCat(c){ curCat=c; renderCats(); renderGrid(); }
 
+// 一個商品可屬於多個類別（tab 以逗號分隔），回傳它所有類別陣列
+function catsOf(p){
+  if(Array.isArray(p.cats)) return p.cats;
+  return String(p.cat||'').split(',').map(s=>s.trim()).filter(Boolean);
+}
+
 function renderGrid(){
-  const list = PRODUCTS.filter(p=>curCat==='全部'||p.cat===curCat);
+  const list = PRODUCTS.filter(p=>curCat==='全部'||catsOf(p).includes(curCat));
   if(list.length===0){ $('grid').innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="e">🪄</div>施展魔法中<br>敬請期待</div>`; return; }
   $('grid').innerHTML = list.map(p=>{
     const q = cart[p.id]?.qty||0;
