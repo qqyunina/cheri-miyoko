@@ -76,6 +76,12 @@ h1 .script{font-family:var(--script);font-size:22px;color:var(--pink);font-weigh
 .todo-h{font-weight:800;color:var(--pinkd);font-size:15px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .todo-h span{font-size:12px;font-weight:700;color:var(--mu)}
 .todo-hint{font-size:11.5px;color:var(--mu);margin:-2px 0 8px}
+.todo-filter{margin:2px 0 12px}
+.todo-filtbtn{padding:8px 14px;border-radius:999px;border:1.5px solid var(--bo);background:var(--card);font-size:13px;font-weight:800;color:var(--pinkd);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(200,140,165,.1)}
+.todo-filtbtn.active{background:var(--pinkl);border-color:var(--pink)}
+.todo-filtbtn .fi{font-size:14px}
+.todo-filtbtn .caret{font-size:9px;color:var(--mu);margin-left:2px}
+.todo-filtpanel{margin:10px 0 0!important;padding:12px;background:var(--pinkl);border:1.5px solid var(--bo);border-radius:14px}
 .todo-need{color:var(--pinkd);font-weight:800;font-size:12px;margin-left:6px;background:var(--pinkl);padding:1px 8px;border-radius:999px}
 .todo-by{color:#b0b0b0;font-weight:500;font-size:12px;margin-left:6px}
 .vip-sub{color:var(--mu);font-weight:600;font-size:12px;margin-left:5px}
@@ -395,6 +401,7 @@ let catalogProducts = [];
 const DEFAULT_TABS = ['聯名商品','現貨商品','口金包','托特包','波奈特帽','髮帶','髮夾','項鍊','戒指','蓬蓬卡套','背帶'];
 let tabList = DEFAULT_TABS.slice();
 let todoTab = '全';   // 待製清單的頁籤篩選
+let todoFilterOpen = false;   // 待製篩選面板是否展開
 const $ = id => document.getElementById(id);
 const money = n => (n||0).toLocaleString();
 // 跳脫客人可控欄位（姓名/IG/Email/備註/品項名…），防止儲存型 XSS 在後台執行
@@ -646,11 +653,19 @@ function render(){
     if(flatAll.length===0){ el0.innerHTML = `<div class="empty"><div class="e">🎉</div>太棒了！所有品項都做好囉～</div>`; return; }
     // 頁籤篩選列：全 + 每個頁籤（各顯示件數）
     const countByTab = {}; flatAll.forEach(f=>{ countByTab[f.tab]=(countByTab[f.tab]||0)+1; });
+    const curTab = todoTab || '全';
+    const curN = (curTab==='全') ? flatAll.length : (countByTab[curTab]||0);
     const filterBtns = ['全', ...tabList].map(t=>{
       const n = (t==='全') ? flatAll.length : (countByTab[t]||0);
-      const on = (todoTab||'全')===t;
+      const on = curTab===t;
       return `<button class="btn ${on?'on':''}" onclick="setTodoTab('${t.replace(/'/g,"\\'")}')">${esc(t)}（${n}）</button>`;
     }).join('');
+    const filterUI = `<div class="todo-filter">
+        <button class="todo-filtbtn ${curTab!=='全'?'active':''}" onclick="toggleTodoFilter()">
+          <span class="fi">⚙</span>篩選：${esc(curTab)}（${curN}）<span class="caret">${todoFilterOpen?'▲':'▼'}</span>
+        </button>
+        <div class="filters todo-filtpanel" style="${todoFilterOpen?'':'display:none'}">${filterBtns}</div>
+      </div>`;
     const flat = (!todoTab || todoTab==='全') ? flatAll : flatAll.filter(f=>f.tab===todoTab);
     pendingFlat = flat;   // 供「完成」按鈕用索引安全取回品項（對應目前篩選後的清單）
     const body = flat.length
@@ -663,7 +678,7 @@ function render(){
     el0.innerHTML = `<div class="card">
       <div class="todo-h">🧵 待製清單　<span>共 ${flatAll.length} 件</span></div>
       <div class="todo-hint">⏳ 等越久的商品排越上面哦，「還缺 N」是這個品項還沒做的總數</div>
-      <div class="filters" style="margin:2px 0 12px">${filterBtns}</div>
+      ${filterUI}
       ${body}
     </div>`;
     return;
@@ -948,7 +963,8 @@ function tabOfItem(it){
   const byName = catalogProducts.find(p=>p.name===it.name);
   return byName ? (byName.tab||'') : '';
 }
-function setTodoTab(t){ todoTab = t; render(); }
+function setTodoTab(t){ todoTab = t; todoFilterOpen = false; render(); }
+function toggleTodoFilter(){ todoFilterOpen = !todoFilterOpen; render(); }
 
 async function loadProducts(){
   const { data, error } = await sb.from('products').select('*').order('sort',{ascending:true}).order('id',{ascending:true});
